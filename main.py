@@ -1,37 +1,17 @@
 import gym
-#from model import ICMNet
+from agent import ICMAgent
 from PIL import Image
 import torchvision.transforms as transforms
 
 
+
 # constants
-num_epoch = 20
-num_step = 100
+num_epoch = 5
+num_step = 50
 
 # objects
-env = gym.make('MsPacman-v0')
-#icm_net = ICMNet(env.action_space.n)
+#env = gym.make('MsPacman-v0')
+env = gym.make('MontezumaRevenge-v0')
+agent = ICMAgent(env.action_space.n)
 
-# functions
-def PixelsToTensor(pix):
-    im2tensor = transforms.Compose([transforms.ToPILImage(),
-                                    transforms.Grayscale(1),
-                                    transforms.Resize((42,42)),
-                                    transforms.ToTensor()])
-
-    return im2tensor(pix)
-
-    
-
-# aaannd ACTION!!!
-for _ in range(num_epoch):
-    obs = env.reset()
-
-    for t in range(num_step):
-        env.render()
-        print(obs)
-        action = env.action_space.sample()
-        obs, reward, done, info = env.step(action)
-        if done:
-            print("Episode finished after {} timesteps".format(t+1))
-            break
+agent.train('MontezumaRevenge-v0', num_epoch, num_step)
