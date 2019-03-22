@@ -41,19 +41,22 @@ class FeatureEncoderNet(nn.Module):
     """
     def __init__(self, in_size):
         super(FeatureEncoderNet, self).__init__()
-
         # constants
         self.in_size = in_size
         self.h1 = 256
+        self.num_layers = 1
+        self.num_directions = 1
 
         # layers
         self.conv = ConvBlock()
         self.lstm = nn.LSTM(input_size=self.in_size, hidden_size=self.h1, batch_first=True)
 
     def forward(self, x):
-        h_t1 = c_t1 = torch.zeros(4, x.size(0), self.h1).cuda() if torch.cuda.is_available() else torch.zeros(4,x.size(0),self.h1)
+        h_t1 = c_t1 = torch.zeros(self.num_layers*self.num_directions, x.size(0), self.h1).cuda() if torch.cuda.is_available() else torch.zeros(self.num_layers*self.num_directions,x.size(0),self.h1)
 
-        h_t1, c_t1 = self.lstm1(self.conv(x), (h_t1, c_t1)) # h_t1 is the output
+        x = self.conv(x)
+        x = x.view(1,1,-1)
+        h_t1, c_t1 = self.lstm(x, (h_t1, c_t1)) # h_t1 is the output
 
         return h_t1
 

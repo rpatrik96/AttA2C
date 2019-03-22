@@ -14,4 +14,5 @@ num_step = 50
 env = gym.make('MontezumaRevenge-v0')
 agent = ICMAgent(env.action_space.n)
 
+agent.cuda()
 agent.train('MontezumaRevenge-v0', num_epoch, num_step)
