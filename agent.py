@@ -28,12 +28,12 @@ class ICMAgent(nn.Module):
         self.optimizer = optim.Adam( list(self.icm.parameters()) + list(self.a3c.parameters()) )
 
     def get_action(self, s_t):
-        s_t = torch.Tensor(s_t).float()  # copy state to device as float
+        #s_t = torch.Tensor(s_t).float()  # copy state to device as float
         #s_t = s_t.float()
-        s_t = self.pix2tensor(s_t)
+        #s_t = self.pix2tensor(s_t)
         policy, value = self.a3c(s_t) # use A3C to get policy and value
         action_prob = F.softmax(policy, dim=-1).data.cpu().numpy()
-        print(action_prob)
+        #action_prob = action_prob[0,:,:] #remove first dimension
         a_t = self.sel_rnd_idx(action_prob) # detach for action?
         print(a_t)
 
@@ -41,8 +41,6 @@ class ICMAgent(nn.Module):
 
     @staticmethod
     def sel_rnd_idx(p, axis=1):
-        from pdb import set_trace
-        set_trace()
         r = np.expand_dims(np.random.rand(p.shape[1 - axis]), axis=axis) # insert a new dim with a random value
         return (p.cumsum(axis=axis) > r).argmax(axis=axis)
 
@@ -85,15 +83,21 @@ class ICMAgent(nn.Module):
             s_t  = env.reset()
 
             for step in range(num_steps):
+                s_t = self.pix2tensor(s_t)
                 a_t, policy, value = self.get_action(s_t) # select action from the policy
 
                 # interact with the environment
-                from pdb import set_trace
-                set_trace()
                 s_t1, r, done, info = env.step(a_t)
                 r_cum = self.cumulate_reward(r)
+                s_t1 = self.pix2tensor(s_t1)
 
                 # call the ICM model
+                a_t = torch.FloatTensor(a_t)
+                if self.is_cuda:
+                    a_t = a_t.cuda()
+                
+                from pdb import set_trace
+                #set_trace()
                 phi_t1, phi_t1_pred, a_t_pred = self.icm(s_t, s_t1, a_t)
 
 

@@ -52,13 +52,16 @@ class FeatureEncoderNet(nn.Module):
         self.lstm = nn.LSTM(input_size=self.in_size, hidden_size=self.h1, batch_first=True)
 
     def forward(self, x):
+        from pdb import set_trace
+        #set_trace()
+        print(x.size(0))
         h_t1 = c_t1 = torch.zeros(self.num_layers*self.num_directions, x.size(0), self.h1).cuda() if torch.cuda.is_available() else torch.zeros(self.num_layers*self.num_directions,x.size(0),self.h1)
 
         x = self.conv(x)
         x = x.view(1,1,-1)
         h_t1, c_t1 = self.lstm(x, (h_t1, c_t1)) # h_t1 is the output
 
-        return h_t1
+        return h_t1[:, -1, :]
 
 
 class InverseNet(nn.Module):
@@ -139,7 +142,9 @@ class AdversarialHead(nn.Module):
 
         # forward dynamics
         # predict next encoded state
-        fwd_in = torch.cat((phi_t, a_t), 1) # concatenate next to each other
+        from pdb import set_trace
+        #set_trace()
+        fwd_in = torch.cat((torch.squeeze(phi_t), a_t), 0) # concatenate next to each other
         phi_t1_hat =  self.fwd_net(fwd_in)
 
         # inverse dynamics
