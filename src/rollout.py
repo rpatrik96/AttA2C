@@ -2,6 +2,12 @@ import torch
 
 class Rollout(object) :
     def __init__(self, rollout_size, num_envs, is_cuda=True) :
+        """
+
+        :param rollout_size: number of steps after the policy gets updated
+        :param num_envs: number of environments to train on parallel
+        :param is_cuda: flag whether to use CUDA
+        """
         super().__init__()
 
         self.rollout_size = rollout_size
@@ -18,6 +24,22 @@ class Rollout(object) :
                     for each environment (length is rollout_size)
         """
 
+        self.reset_buffers()
+
+    def reset_buffers(self) :
+        """
+        Creates and/or resets the buffers - each of size (rollout_size, num_envs) -
+        storing: - rewards
+                 - actions
+                 - log probabilities
+                 - values
+                 - dones
+
+         NOTE: calling this function after a `.backward()` ensures that all data
+         not needed in the future (which may `requires_grad()`) gets freed, thus
+         avoiding memory leak
+        :return:
+        """
         self.rewards = self._generate_buffer((self.rollout_size, self.num_envs))
         self.actions = self._generate_buffer((self.rollout_size, self.num_envs))
         self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
@@ -26,6 +48,7 @@ class Rollout(object) :
 
     def _generate_buffer(self, size) :
         """
+        Generates a `torch.zeros` tensor with the specified size.
 
         :param size: size of the tensor (tuple)
         :return:  tensor filled with zeros of 'size'
@@ -38,6 +61,7 @@ class Rollout(object) :
 
     def insert(self, step, rewards, actions, log_probs, values, dones) :
         """
+        Inserts new data into the log for each environment at index step
 
         :param step: index of the step
         :param rewards: numpy array of the rewards
@@ -55,6 +79,9 @@ class Rollout(object) :
 
     def compute_reward(self, final_value, discount=0.99) :
         """
+        Computes the discounted reward while respecting - if the episode
+        is not done - the estimate of the final reward from that state (i.e.
+        the value function passed as the argument `final_value`)
 
         :param env_idx: index of the environment
         :param final_value: estimate of the final reward by the critic

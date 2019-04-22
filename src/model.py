@@ -56,7 +56,7 @@ class FeatureEncoderNet(nn.Module) :
             self.lstm = nn.LSTMCell(input_size=self.in_size, hidden_size=self.h1)
 
     def reset_lstm(self, x) :
-        if self.is_lstm :
+        if self.is_lstm:
             with torch.no_grad() :
                 self.h_t1 = self.c_t1 = torch.zeros(x, self.h1).cuda() if torch.cuda.is_available() else torch.zeros(x,
                                                                                                                      self.h1)
@@ -64,7 +64,7 @@ class FeatureEncoderNet(nn.Module) :
     def forward(self, x) :
         x = self.conv(x)
 
-        if self.is_lstm :
+        if self.is_lstm:
             x = x.view(-1, self.in_size)
             self.h_t1, self.c_t1 = self.lstm(x, (self.h_t1, self.c_t1))  # h_t1 is the output
             return self.h_t1  # [:, -1, :]#.reshape(-1)
