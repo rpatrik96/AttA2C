@@ -14,16 +14,7 @@ class Rollout(object) :
         self.num_envs = num_envs
         self.is_cuda = is_cuda
 
-        """Buffers"""
-        """storing:
-                    - rewards
-                    - actions
-                    - log probabilities
-                    - values
-                    - dones
-                    for each environment (length is rollout_size)
-        """
-
+        # initialize the buffers with zeros
         self.reset_buffers()
 
     def reset_buffers(self) :
@@ -94,25 +85,25 @@ class Rollout(object) :
             return (data - data.mean()) / (data.std() + 10e-9)
 
         """Setup"""
-        # placeholder list to avoid dynamic list allocation with insert
+        # placeholder tensor to avoid dynamic allocation with insert
         r_discounted = self._generate_buffer((self.rollout_size, self.num_envs))
-        # reversed indices
-        rev_idx = list(range(self.rollout_size - 1, -1, -1))
 
         """Calculate discounted rewards"""
         # setup the reward chain
         # if the rollout has brought the env to finish
-        # then we proceed with 0 as final reward (there is nothing to gain)
+        # then we proceed with 0 as final reward (there is nothing to gain in that episode)
         # but if we did not finish, then we use our estimate
+
         # masked_scatter_ copies from #1 where #0 is 1 -> but we need scattering, where
-        # the episode is not finished
-        from pdb import set_trace
+        # the episode is not finished, thus the (1-x)
         R = self._generate_buffer(self.num_envs).masked_scatter((1 - self.dones[-1]).byte(), final_value)
 
-        for i in rev_idx :
+        for i in reversed(range(self.rollout_size)) :
             # the reward can only change if we are within the episode
             # i.e. while done==True, we use 0
-            # set_trace()
+            # NOTE: this update rule also can handle, if a new episode has started during the rollout
+            # in that case an intermediate value will be 0
+            # todo: add GAE
             R = self._generate_buffer(self.num_envs).masked_scatter((1 - self.dones[-1]).byte(),
                                                                     self.rewards[i] + discount * R)
 

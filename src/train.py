@@ -2,6 +2,8 @@ import torch
 
 from src.rollout import Rollout
 
+# todo: model save + reaftor into a class? + LSTM reset
+
 def train(net, env, optimizer, num_envs, rollout_size=8, is_cuda=True) :
     num_steps = 10000
 
@@ -57,9 +59,6 @@ def rollout(env, is_cuda, logger, net, obs, rollout_size) :
     return final_value
 
 def a2c_loss(rewards, log_prob, values) :
-    # grab the log probability of the action taken, the value associated to it
-    # and the reward
-    # for log_prob, value, R in zip(a_t_log_prob, values, rewards) :
 
     # calculate advantage
     # i.e. how good was the estimate of the value of the current state
@@ -78,6 +77,7 @@ def a2c_loss(rewards, log_prob, values) :
     # which is the sum of the actor (policy) and critic (advantage) losses
     # due to the fact that batches can be shorter (e.g. if an env is finished already)
     # MEAN is used instead of SUM
+    #todo: include entropy?
     loss = policy_loss + value_loss
 
     return loss
