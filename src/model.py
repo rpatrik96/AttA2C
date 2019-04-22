@@ -226,7 +226,6 @@ class A2CNet(nn.Module) :
         """
 
         :param s_t: current state
-        :param num_env: number of parallel environments
         :return: tuple of (a_t, log_prob_a_t, value)
         """
 

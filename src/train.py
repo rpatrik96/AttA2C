@@ -1,3 +1,6 @@
+import math
+
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -49,10 +52,8 @@ def play_episode(net, env, num_envs, is_cuda=True) :
 
     return episode_rewards, actions, a_t_log_probs, values, episode_dones
 
-def train(net, env, optimizer, num_envs, is_cuda=True) :
-    num_epoch = 10
-    rollout_size = 5
-
+def train(net, env, optimizer, num_envs, num_epoch=20, rollout_size=8, is_cuda=True) :
+    num_backwards = 0
     """--------------------------------"""
     """Training"""
     """--------------------------------"""
@@ -62,11 +63,12 @@ def train(net, env, optimizer, num_envs, is_cuda=True) :
         """Epsiode"""
         """--------------------------------"""
         rewards, actions, a_t_log_probs, values, dones = play_episode(net, env, num_envs, is_cuda)
-        print("play finished")
 
         """process data/env"""
 
+        env_idx = 0
         for r, a_t, a_t_log_p, val, done in zip(rewards, actions, a_t_log_probs, values, dones) :
+
             if True in done :
                 end_idx = done.index(True) + 1
                 r = r[:end_idx]
@@ -75,24 +77,26 @@ def train(net, env, optimizer, num_envs, is_cuda=True) :
                 val = val[:end_idx]
 
             num_frames = len(r)
-            import math
+
             num_updates = math.ceil(num_frames / rollout_size)
+
+            num_backwards += num_updates
+            with torch.no_grad() :
+                print("Env ", env_idx, " reward: ", np.array(r).sum(), " #backwards: ", num_backwards)
+                env_idx += 1
 
             # discount rewards
             r = discount_reward(r)
 
             for i in range(num_updates) :
-                print("into loss calc")
 
                 optimizer.zero_grad()
                 loss = a2c_loss(r[i * rollout_size :(i + 1) * rollout_size],
                                 a_t_log_p[i * rollout_size :(i + 1) * rollout_size],
                                 val[i * rollout_size :(i + 1) * rollout_size])
 
-                loss.backward()
+                loss.backward(retain_graph=True)
                 optimizer.step()
-
-                print("loss", loss.item())
 
 def discount_reward(rewards, discount=0.99) :
     # normalization function
@@ -137,8 +141,10 @@ def a2c_loss(rewards, a_t_log_prob, values) :
         # and predicted rewards
         value_losses.append(F.mse_loss(value, torch.tensor([R]).cuda()))
 
-    # return the a3c loss
+    # return the a2c loss
     # which is the sum of the actor (policy) and critic (advantage) losses
-    loss = torch.stack(policy_losses).sum() + torch.stack(value_losses).sum()
+    # due to the fact that batches can be shorter (e.g. if an env is finished already)
+    # MEAN is used instead of SUM
+    loss = torch.stack(policy_losses).mean() + torch.stack(value_losses).mean()
 
     return loss
