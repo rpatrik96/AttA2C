@@ -7,7 +7,7 @@ from src.model import A2CNet
 from src.train import Runner
 
 # constants
-NUM_ENV = 4
+NUM_ENV = 16
 SEED = 42
 N_STACK = 4
 

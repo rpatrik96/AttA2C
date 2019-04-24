@@ -6,7 +6,7 @@ from storage import RolloutStorage
 
 class Runner(object) :
 
-    def __init__(self, net, env, optimizer, num_envs, rollout_size=8, num_steps=500000, is_cuda=True) :
+    def __init__(self, net, env, optimizer, num_envs, rollout_size=8, num_steps=2000000, is_cuda=True) :
         super().__init__()
 
         # constants
@@ -37,7 +37,7 @@ class Runner(object) :
 
             self.optimizer.zero_grad()
             loss = a2c_loss(self.storage.compute_reward(final_value), self.storage.log_probs, self.storage.values)
-            loss.backward(retain_graph=True)
+            loss.backward(retain_graph=False)
             self.optimizer.step()
 
             # it stores a lot of data which let's the graph

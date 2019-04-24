@@ -73,7 +73,6 @@ class FeatureEncoderNet(nn.Module) :
         if self.is_lstm :
             with torch.no_grad() :
                 if reset_indices is None :
-                    print("not done")
                     self.h_t1 = self.c_t1 = torch.zeros(buf_size,
                                                         self.h1).cuda() if torch.cuda.is_available() else torch.zeros(
                             buf_size,
@@ -81,7 +80,6 @@ class FeatureEncoderNet(nn.Module) :
                 else :
                     resetTensor = torch.from_numpy(reset_indices.astype(np.uint8))
                     if resetTensor.sum() :
-                        print(reset_indices)
                         self.h_t1 = (1 - resetTensor.view(-1, 1)).float().cuda() * self.h_t1
                         self.c_t1 = (1 - resetTensor.view(-1, 1)).float().cuda() * self.c_t1
 
