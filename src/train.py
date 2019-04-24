@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 from storage import RolloutStorage
@@ -6,13 +7,13 @@ from storage import RolloutStorage
 
 class Runner(object) :
 
-    def __init__(self, net, env, optimizer, num_envs, rollout_size=8, num_steps=2000000, is_cuda=True) :
+    def __init__(self, net, env, optimizer, num_envs, rollout_size=8, num_updates=750000, is_cuda=True) :
         super().__init__()
 
         # constants
         self.num_envs = num_envs
         self.rollout_size = rollout_size
-        self.num_steps = num_steps
+        self.num_updates = num_updates
 
         self.is_cuda = torch.cuda.is_available() and is_cuda
 
@@ -30,8 +31,9 @@ class Runner(object) :
         """Environment reset"""
         obs = self.env.reset()
         self.storage.states[0].copy_(self.storage.obs2tensor(obs))
+        best_loss = np.inf
 
-        for _ in range(self.num_steps) :
+        for num_update in range(self.num_updates) :
 
             final_value = self.episode_rollout()
 
@@ -43,6 +45,14 @@ class Runner(object) :
             # it stores a lot of data which let's the graph
             # grow out of memory, so it is crucial to reset
             self.storage.after_update()
+
+            if loss < best_loss:
+                best_loss = loss.item()
+                print("model saved with best loss: ", best_loss, " at update #", num_update)
+                torch.save(self.net.state_dict(), "a2c_best_loss")
+
+            if num_update % 20 == 0:
+                print("current loss: ", loss.item(), " at update #", num_update)
 
         self.env.close()
 
