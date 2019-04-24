@@ -1,8 +1,8 @@
 import torch
 
-from src.rollout import Rollout
+from storage import RolloutStorage
 
-# todo: model save + LSTM reset
+# todo: model save
 
 class Runner(object) :
 
@@ -16,12 +16,11 @@ class Runner(object) :
 
         self.is_cuda = torch.cuda.is_available() and is_cuda
 
-
         # objects
         self.net = net
         self.env = env
         self.optimizer = optimizer
-        self.logger = Rollout(self.rollout_size, self.num_envs, self.is_cuda)
+        self.storage = RolloutStorage(self.rollout_size, self.num_envs, (84, 84), 4, self.is_cuda)
 
         if self.is_cuda :
             self.net = self.net.cuda()
@@ -30,49 +29,43 @@ class Runner(object) :
 
         """Environment reset"""
         obs = self.env.reset()
-        self.logger.states[self.rollout_size - 1].copy_(self.logger.obs2tensor(obs))
-
-        self.net.feat_enc_net.reset_lstm(self.num_envs)
+        self.storage.states[0].copy_(self.storage.obs2tensor(obs))
 
         for _ in range(self.num_steps) :
 
-            final_value, obs = self.rollout(obs)
+            final_value = self.episode_rollout()
 
             self.optimizer.zero_grad()
-            loss = a2c_loss(self.logger.compute_reward(final_value), self.logger.log_probs, self.logger.values)
+            loss = a2c_loss(self.storage.compute_reward(final_value), self.storage.log_probs, self.storage.values)
             loss.backward(retain_graph=True)
             self.optimizer.step()
 
             # it stores a lot of data which let's the graph
             # grow out of memory, so it is crucial to reset
-            # self.logger.after_update()
-            self.logger.reset_buffers()
-
+            self.storage.after_update()
 
         self.env.close()
 
-    def rollout(self, o) :
-
-        obs = o
+    def episode_rollout(self) :
         for step in range(self.rollout_size) :
 
             """Interact with the environments """
             # call A2C
-            a_t, log_p_a_t, value = self.net.get_action(self.logger.obs2tensor(obs))
+            a_t, log_p_a_t, value = self.net.get_action(self.storage.get_state(step))
             # interact
             obs, rewards, dones, _ = self.env.step(a_t.cpu().numpy())
             # self.env.render()
 
-            self.logger.insert(step, rewards, obs, a_t, log_p_a_t, value, dones)
-            self.net.feat_enc_net.reset_lstm(self.num_envs, dones=dones)
+            self.storage.insert(step, rewards, obs, a_t, log_p_a_t, value, dones)
+            self.net.reset_recurrent_buffers(reset_indices=dones)
 
         # Note:
         # get the estimate of the final reward
         # that's why we have the CRITIC --> estimate final reward
         # detach, as the final value will only be used as a
         with torch.no_grad() :
-            _, _, final_value = self.net.get_action(self.logger.obs2tensor(obs))
-        return final_value, obs
+            _, _, final_value = self.net.get_action(self.storage.get_state(step + 1))
+        return final_value
 
 def a2c_loss(rewards, log_prob, values) :
     # calculate advantage

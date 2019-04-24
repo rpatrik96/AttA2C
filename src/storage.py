@@ -1,17 +1,21 @@
 import torch
 
-class Rollout(object) :
-    def __init__(self, rollout_size, num_envs, is_cuda=True) :
+class RolloutStorage(object) :
+    def __init__(self, rollout_size, num_envs, frame_shape, n_stack, is_cuda=True) :
         """
 
         :param rollout_size: number of steps after the policy gets updated
         :param num_envs: number of environments to train on parallel
+        :param frame_shape: shape of a frame as a tuple
+        :param n_stack: number of frames concatenated
         :param is_cuda: flag whether to use CUDA
         """
         super().__init__()
 
         self.rollout_size = rollout_size
         self.num_envs = num_envs
+        self.n_stack = n_stack
+        self.frame_shape = frame_shape
         self.is_cuda = is_cuda
 
         # initialize the buffers with zeros
@@ -46,24 +50,32 @@ class Rollout(object) :
         :return:
         """
         self.rewards = self._generate_buffer((self.rollout_size, self.num_envs))
-        self.states = self._generate_buffer((self.rollout_size, self.num_envs, 4, 84, 84))
+        self.states = self._generate_buffer((self.rollout_size + 1, self.num_envs, self.n_stack, *self.frame_shape))
         self.actions = self._generate_buffer((self.rollout_size, self.num_envs))
         self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
         self.values = self._generate_buffer((self.rollout_size, self.num_envs))
         self.dones = self._generate_buffer((self.rollout_size, self.num_envs))
 
-    def after_update(self):
-        # self.states[0].copy_(self.states[-1])
+    def after_update(self) :
+        """
+        Cleaning up buffers after a rollout is finished and
+        copying the last state to index 0
+        :return:
+        """
+        self.states[0].copy_(self.states[-1])
         self.actions = self._generate_buffer((self.rollout_size, self.num_envs))
         self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
         self.values = self._generate_buffer((self.rollout_size, self.num_envs))
 
-    def get_last_state(self, step):
-        idx = (step - 1) % self.rollout_size
-        return self.states[idx]
-
-    def get_current_state(self, step):
-        return self.states[step]
+    def get_state(self, step):
+        """
+        Returns the observation of index step as a cloned object,
+        otherwise torch.nn.autograd cannot calculate the gradients
+        (indexing is the culprit)
+        :param step: index of the state
+        :return:
+        """
+        return self.states[step].clone()
 
     def obs2tensor(self, obs) :
         # 1. reorder dimensions for nn.Conv2d (batch, ch_in, width, height)
@@ -85,7 +97,7 @@ class Rollout(object) :
         :return:
         """
         self.rewards[step].copy_(torch.from_numpy(rewards))
-        # self.states[step].copy_(self.obs2tensor(obs))
+        self.states[step + 1].copy_(self.obs2tensor(obs))
         self.actions[step].copy_(actions)
         self.log_probs[step].copy_(log_probs)
         self.values[step].copy_(values)

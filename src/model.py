@@ -62,30 +62,28 @@ class FeatureEncoderNet(nn.Module) :
         if self.is_lstm :
             self.lstm = nn.LSTMCell(input_size=self.in_size, hidden_size=self.h1)
 
-    def reset_lstm(self, batch_size=None, dones=None) :
-        # todo: the env wrapper automatically resets after an episode is finished, how to comply with that?
-
+    def reset_lstm(self, buf_size=None, reset_indices=None) :
         """
         Resets the inner state of the LSTMCell
 
-        :param dones: boolean list of the dones
-        :param batch_size: batch size (needed to generate the correct hidden state size)
+        :param reset_indices: boolean list of the indices to reset (if True then that column will be zeroed)
+        :param buf_size: buffer size (needed to generate the correct hidden state size)
         :return:
         """
         if self.is_lstm :
             with torch.no_grad() :
-                if dones is None :
+                if reset_indices is None :
                     print("not done")
-                    self.h_t1 = self.c_t1 = torch.zeros(batch_size,
+                    self.h_t1 = self.c_t1 = torch.zeros(buf_size,
                                                         self.h1).cuda() if torch.cuda.is_available() else torch.zeros(
-                            batch_size,
+                            buf_size,
                             self.h1)
                 else :
-                    doneTensor = torch.from_numpy(dones.astype(np.uint8))
-                    if doneTensor.sum() :
-                        print(dones)
-                        self.h_t1 = (1 - doneTensor.view(-1, 1)).float().cuda() * self.h_t1
-                        self.c_t1 = (1 - doneTensor.view(-1, 1)).float().cuda() * self.c_t1
+                    resetTensor = torch.from_numpy(reset_indices.astype(np.uint8))
+                    if resetTensor.sum() :
+                        print(reset_indices)
+                        self.h_t1 = (1 - resetTensor.view(-1, 1)).float().cuda() * self.h_t1
+                        self.c_t1 = (1 - resetTensor.view(-1, 1)).float().cuda() * self.c_t1
 
     def forward(self, x) :
         """
@@ -262,10 +260,11 @@ class ICMNet(nn.Module) :
         return phi_t1, phi_t1_pred, a_t_pred  # (phi_t1_pred, a_t_pred), (phi_t1_policy, a_t_policy)
 
 class A2CNet(nn.Module) :
-    def __init__(self, n_stack, num_actions, in_size=288) :
+    def __init__(self, n_stack, num_envs, num_actions, in_size=288) :
         """
         Implementation of the Advantage Actor-Critic (A2C) network
 
+        :param num_envs:
         :param n_stack: number of frames stacked
         :param num_actions: size of the action space, pass env.action_space.n
         :param in_size: input size of the LSTMCell of the FeatureEncoderNet
@@ -281,6 +280,27 @@ class A2CNet(nn.Module) :
         self.actor = nn.Linear(self.feat_enc_net.h1, self.num_actions)  # estimates what to do
         self.critic = nn.Linear(self.feat_enc_net.h1,
                                 1)  # estimates how good the value function (how good the current state is)
+
+        # init LSTM buffers with the number of the environments
+        self._set_recurrent_buffers(num_envs)
+
+    def _set_recurrent_buffers(self, buf_size) :
+        """
+        Initializes LSTM buffers with the proper size
+
+        :param buf_size: size of the recurrent buffer
+        :return:
+        """
+        self.feat_enc_net.reset_lstm(buf_size=buf_size)
+
+    def reset_recurrent_buffers(self, reset_indices) :
+        """
+
+        :param reset_indices: boolean numpy array containing True at the indices which
+                              should be reset
+        :return:
+        """
+        self.feat_enc_net.reset_lstm(reset_indices=reset_indices)
 
     def forward(self, s_t) :
         """

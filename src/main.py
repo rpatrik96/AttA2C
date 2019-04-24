@@ -20,7 +20,7 @@ if __name__ == '__main__' :
     env = VecFrameStack(env, n_stack=N_STACK)
 
     """Model"""
-    a2c = A2CNet(n_stack=N_STACK, num_actions=env.action_space.n)
+    a2c = A2CNet(n_stack=N_STACK, num_envs=NUM_ENV, num_actions=env.action_space.n)
     a2c.cuda()
     optimizer = optim.Adam(a2c.parameters())
 
