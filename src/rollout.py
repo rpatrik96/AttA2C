@@ -17,26 +17,6 @@ class Rollout(object) :
         # initialize the buffers with zeros
         self.reset_buffers()
 
-    def reset_buffers(self) :
-        """
-        Creates and/or resets the buffers - each of size (rollout_size, num_envs) -
-        storing: - rewards
-                 - actions
-                 - log probabilities
-                 - values
-                 - dones
-
-         NOTE: calling this function after a `.backward()` ensures that all data
-         not needed in the future (which may `requires_grad()`) gets freed, thus
-         avoiding memory leak
-        :return:
-        """
-        self.rewards = self._generate_buffer((self.rollout_size, self.num_envs))
-        self.actions = self._generate_buffer((self.rollout_size, self.num_envs))
-        self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
-        self.values = self._generate_buffer((self.rollout_size, self.num_envs))
-        self.dones = self._generate_buffer((self.rollout_size, self.num_envs))
-
     def _generate_buffer(self, size) :
         """
         Generates a `torch.zeros` tensor with the specified size.
@@ -50,12 +30,54 @@ class Rollout(object) :
         else :
             return torch.zeros(size)
 
-    def insert(self, step, rewards, actions, log_probs, values, dones) :
+    def reset_buffers(self) :
+        """
+        Creates and/or resets the buffers - each of size (rollout_size, num_envs) -
+        storing: - rewards
+                 - states
+                 - actions
+                 - log probabilities
+                 - values
+                 - dones
+
+         NOTE: calling this function after a `.backward()` ensures that all data
+         not needed in the future (which may `requires_grad()`) gets freed, thus
+         avoiding memory leak
+        :return:
+        """
+        self.rewards = self._generate_buffer((self.rollout_size, self.num_envs))
+        self.states = self._generate_buffer((self.rollout_size, self.num_envs, 4, 84, 84))
+        self.actions = self._generate_buffer((self.rollout_size, self.num_envs))
+        self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
+        self.values = self._generate_buffer((self.rollout_size, self.num_envs))
+        self.dones = self._generate_buffer((self.rollout_size, self.num_envs))
+
+    def after_update(self):
+        # self.states[0].copy_(self.states[-1])
+        self.actions = self._generate_buffer((self.rollout_size, self.num_envs))
+        self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
+        self.values = self._generate_buffer((self.rollout_size, self.num_envs))
+
+    def get_last_state(self, step):
+        idx = (step - 1) % self.rollout_size
+        return self.states[idx]
+
+    def get_current_state(self, step):
+        return self.states[step]
+
+    def obs2tensor(self, obs) :
+        # 1. reorder dimensions for nn.Conv2d (batch, ch_in, width, height)
+        # 2. convert numpy array to _normalized_ FloatTensor
+        tensor = torch.from_numpy(obs.transpose((0, 3, 1, 2))).float() / 255.
+        return tensor.cuda() if self.is_cuda else tensor
+
+    def insert(self, step, rewards, obs, actions, log_probs, values, dones) :
         """
         Inserts new data into the log for each environment at index step
 
         :param step: index of the step
         :param rewards: numpy array of the rewards
+        :param obs: observation as a numpy array
         :param actions: tensor of the actions
         :param log_probs: tensor of the log probabilities
         :param values: tensor of the values
@@ -63,6 +85,7 @@ class Rollout(object) :
         :return:
         """
         self.rewards[step].copy_(torch.from_numpy(rewards))
+        # self.states[step].copy_(self.obs2tensor(obs))
         self.actions[step].copy_(actions)
         self.log_probs[step].copy_(log_probs)
         self.values[step].copy_(values)

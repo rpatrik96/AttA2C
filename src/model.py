@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -61,21 +62,30 @@ class FeatureEncoderNet(nn.Module) :
         if self.is_lstm :
             self.lstm = nn.LSTMCell(input_size=self.in_size, hidden_size=self.h1)
 
-    def reset_lstm(self, batch_size) :
+    def reset_lstm(self, batch_size=None, dones=None) :
         # todo: the env wrapper automatically resets after an episode is finished, how to comply with that?
 
         """
         Resets the inner state of the LSTMCell
 
+        :param dones: boolean list of the dones
         :param batch_size: batch size (needed to generate the correct hidden state size)
         :return:
         """
         if self.is_lstm :
             with torch.no_grad() :
-                self.h_t1 = self.c_t1 = torch.zeros(batch_size,
-                                                    self.h1).cuda() if torch.cuda.is_available() else torch.zeros(
-                        batch_size,
-                        self.h1)
+                if dones is None :
+                    print("not done")
+                    self.h_t1 = self.c_t1 = torch.zeros(batch_size,
+                                                        self.h1).cuda() if torch.cuda.is_available() else torch.zeros(
+                            batch_size,
+                            self.h1)
+                else :
+                    doneTensor = torch.from_numpy(dones.astype(np.uint8))
+                    if doneTensor.sum() :
+                        print(dones)
+                        self.h_t1 = (1 - doneTensor.view(-1, 1)).float().cuda() * self.h_t1
+                        self.c_t1 = (1 - doneTensor.view(-1, 1)).float().cuda() * self.c_t1
 
     def forward(self, x) :
         """

@@ -4,7 +4,7 @@ from stable_baselines.common.cmd_util import make_atari_env
 from stable_baselines.common.vec_env import VecFrameStack
 
 from src.model import A2CNet
-from src.train import train
+from src.train import Runner
 
 # constants
 NUM_ENV = 4
@@ -25,4 +25,5 @@ if __name__ == '__main__' :
     optimizer = optim.Adam(a2c.parameters())
 
     """Training"""
-    train(a2c, env, optimizer, NUM_ENV, is_cuda=True)
+    runner = Runner(a2c, env, optimizer, NUM_ENV, is_cuda=True)
+    runner.train()
