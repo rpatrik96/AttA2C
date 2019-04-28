@@ -51,8 +51,10 @@ class Runner(object) :
                 print("model saved with best loss: ", best_loss, " at update #", num_update)
                 torch.save(self.net.state_dict(), "a2c_best_loss")
 
-            if num_update % 20 == 0:
+            elif num_update % 500 == 0:
                 print("current loss: ", loss.item(), " at update #", num_update)
+                self.storage.print_reward_stats()
+                torch.save(self.net.state_dict(), "a2c_time_log")
 
         self.env.close()
 
@@ -63,8 +65,11 @@ class Runner(object) :
             # call A2C
             a_t, log_p_a_t, value = self.net.get_action(self.storage.get_state(step))
             # interact
-            obs, rewards, dones, _ = self.env.step(a_t.cpu().numpy())
+            obs, rewards, dones, infos = self.env.step(a_t.cpu().numpy())
             # self.env.render()
+
+            # save episode reward
+            self.storage.log_episode_rewards(infos)
 
             self.storage.insert(step, rewards, obs, a_t, log_p_a_t, value, dones)
             self.net.reset_recurrent_buffers(reset_indices=dones)

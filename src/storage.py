@@ -1,3 +1,6 @@
+from collections import deque
+
+import numpy as np
 import torch
 
 class RolloutStorage(object) :
@@ -17,6 +20,7 @@ class RolloutStorage(object) :
         self.n_stack = n_stack
         self.frame_shape = frame_shape
         self.is_cuda = is_cuda
+        self.episode_rewards = deque(10)
 
         # initialize the buffers with zeros
         self.reset_buffers()
@@ -67,7 +71,7 @@ class RolloutStorage(object) :
         self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
         self.values = self._generate_buffer((self.rollout_size, self.num_envs))
 
-    def get_state(self, step):
+    def get_state(self, step) :
         """
         Returns the observation of index step as a cloned object,
         otherwise torch.nn.autograd cannot calculate the gradients
@@ -146,3 +150,24 @@ class RolloutStorage(object) :
 
         # normalize and return
         return normalize(r_discounted)
+
+    def log_episode_rewards(self, infos) :
+        """
+        Logs the episode rewards
+
+        :param infos: infos output of env.step()
+        :return:
+        """
+
+        for info in infos :
+            if 'episode' in info.keys() :
+                self.episode_rewards.append(info['episode']['r'])
+
+    def print_reward_stats(self) :
+        if len(self.episode_rewards) > 1 :
+            print(
+                "Mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n".format(np.mean(self.episode_rewards),
+                                                                                          np.median(
+                                                                                              self.episode_rewards),
+                                                                                          np.min(self.episode_rewards),
+                                                                                          np.max(self.episode_rewards)))
