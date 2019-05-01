@@ -59,6 +59,7 @@ class FeatureEncoderNet(nn.Module) :
 
         # layers
         self.conv = ConvBlock(ch_in=n_stack)
+        self.lin = nn.Linear(self.in_size, self.h1)
         if self.is_lstm :
             self.lstm = nn.LSTMCell(input_size=self.in_size, hidden_size=self.h1)
 
@@ -95,6 +96,8 @@ class FeatureEncoderNet(nn.Module) :
         :return:
         """
         x = self.conv(x)
+
+        return self.lin(x)
 
         if self.is_lstm :
             x = x.view(-1, self.in_size)
@@ -212,53 +215,53 @@ class AdversarialHead(nn.Module) :
 
         return phi_t1_hat, a_t_hat
 
-class ICMNet(nn.Module) :
-    def __init__(self, n_stack, num_actions, in_size=288, feat_size=256) :
-        """
-        Network implementing the Intrinsic Curiosity Module (ICM) of https://arxiv.org/abs/1705.05363
-
-        :param n_stack: number of frames stacked
-        :param num_actions: dimensionality of the action space, pass env.action_space.n
-        :param in_size: input size of the AdversarialHeads
-        :param feat_size: size of the feature space
-        """
-        super().__init__()
-
-        # constants
-        self.in_size = in_size  # pixels i.e. state
-        self.feat_size = feat_size
-        self.num_actions = num_actions
-
-        # networks
-        self.feat_enc_net = FeatureEncoderNet(n_stack, self.in_size, is_lstm=False)
-        self.pred_net = AdversarialHead(self.in_size, self.num_actions)  # goal: minimize prediction error
-        self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
-        # (i.e. predict states which can contain new information)
-
-    def forward(self, s_t, s_t1, a_t) :
-        """
-
-        phi_t: current encoded state
-        phi_t1: next encoded state
-
-        :param s_t: current state
-        :param s_t1: next state
-        :param a_t: current action
-        :return:
-        """
-
-        """Encode the states"""
-        phi_t = self.feat_enc_net(s_t)
-        phi_t1 = self.feat_enc_net(s_t1)
-
-        """ HERE COMES THE NEW THING (currently commented out)"""
-        phi_t1_pred, a_t_pred = self.pred_net(phi_t, phi_t1, a_t)
-        # phi_t1_policy, a_t_policy = self.policy_net_net(phi_t, phi_t1, a_t)
-
-        return phi_t1, phi_t1_pred, a_t_pred  # (phi_t1_pred, a_t_pred), (phi_t1_policy, a_t_policy)
+# class ICMNet(nn.Module) :
+#     def __init__(self, n_stack, num_actions, in_size=288, feat_size=256) :
+#         """
+#         Network implementing the Intrinsic Curiosity Module (ICM) of https://arxiv.org/abs/1705.05363
+#
+#         :param n_stack: number of frames stacked
+#         :param num_actions: dimensionality of the action space, pass env.action_space.n
+#         :param in_size: input size of the AdversarialHeads
+#         :param feat_size: size of the feature space
+#         """
+#         super().__init__()
+#
+#         # constants
+#         self.in_size = in_size  # pixels i.e. state
+#         self.feat_size = feat_size
+#         self.num_actions = num_actions
+#
+#         # networks
+#         self.feat_enc_net = FeatureEncoderNet(n_stack, self.in_size, is_lstm=False)
+#         self.pred_net = AdversarialHead(self.in_size, self.num_actions)  # goal: minimize prediction error
+#         self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
+#         # (i.e. predict states which can contain new information)
+#
+#     def forward(self, s_t, s_t1, a_t) :
+#         """
+#
+#         phi_t: current encoded state
+#         phi_t1: next encoded state
+#
+#         :param s_t: current state
+#         :param s_t1: next state
+#         :param a_t: current action
+#         :return:
+#         """
+#
+#         """Encode the states"""
+#         phi_t = self.feat_enc_net(s_t)
+#         phi_t1 = self.feat_enc_net(s_t1)
+#
+#         """ HERE COMES THE NEW THING (currently commented out)"""
+#         phi_t1_pred, a_t_pred = self.pred_net(phi_t, phi_t1, a_t)
+#         # phi_t1_policy, a_t_policy = self.policy_net_net(phi_t, phi_t1, a_t)
+#
+#         return phi_t1, phi_t1_pred, a_t_pred  # (phi_t1_pred, a_t_pred), (phi_t1_policy, a_t_policy)
 
 class A2CNet(nn.Module) :
-    def __init__(self, n_stack, num_envs, num_actions, in_size=288) :
+    def __init__(self, n_stack, num_envs, num_actions, in_size=288, writer=None) :
         """
         Implementation of the Advantage Actor-Critic (A2C) network
 
@@ -269,12 +272,15 @@ class A2CNet(nn.Module) :
         """
         super().__init__()
 
+        self.writer = writer
+        self.num_step = 0
+
         # constants
         self.in_size = in_size  # in_size
         self.num_actions = num_actions
 
         # networks
-        self.feat_enc_net = FeatureEncoderNet(n_stack, self.in_size)
+        self.feat_enc_net = FeatureEncoderNet(n_stack, self.in_size, is_lstm=False)
         self.actor = nn.Linear(self.feat_enc_net.h1, self.num_actions)  # estimates what to do
         self.critic = nn.Linear(self.feat_enc_net.h1,
                                 1)  # estimates how good the value function (how good the current state is)
@@ -315,6 +321,15 @@ class A2CNet(nn.Module) :
         # calculate policy and value function
         policy = self.actor(phi_t)
         value = self.critic(phi_t)
+
+        #self.writer.add_scalar("phi_t", phi_t.mean().item(), global_step=self.num_step)
+        self.writer.add_histogram("phi_t", phi_t.detach(), global_step=self.num_step)
+        #self.writer.add_scalar("policy", policy.mean().item(), global_step=self.num_step)
+        self.writer.add_histogram("policy", policy.detach(), global_step=self.num_step)
+        #self.writer.add_scalar("value", value.mean().item(), global_step=self.num_step)
+        self.writer.add_histogram("value", value.detach(), global_step=self.num_step)
+
+        self.num_step += 1
 
         return policy, torch.squeeze(value)
 

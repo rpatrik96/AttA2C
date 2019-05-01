@@ -20,7 +20,7 @@ class RolloutStorage(object) :
         self.n_stack = n_stack
         self.frame_shape = frame_shape
         self.is_cuda = is_cuda
-        self.episode_rewards = deque(10)
+        self.episode_rewards = deque(maxlen=10)
 
         # initialize the buffers with zeros
         self.reset_buffers()
@@ -84,7 +84,7 @@ class RolloutStorage(object) :
     def obs2tensor(self, obs) :
         # 1. reorder dimensions for nn.Conv2d (batch, ch_in, width, height)
         # 2. convert numpy array to _normalized_ FloatTensor
-        tensor = torch.from_numpy(obs.transpose((0, 3, 1, 2))).float() / 255.
+        tensor = torch.from_numpy(obs.astype(np.float32).transpose((0, 3, 1, 2))) / 255.
         return tensor.cuda() if self.is_cuda else tensor
 
     def insert(self, step, rewards, obs, actions, log_probs, values, dones) :
@@ -148,8 +148,10 @@ class RolloutStorage(object) :
 
             r_discounted[i] = R
 
+        # print(r_discounted)
         # normalize and return
-        return normalize(r_discounted)
+        return r_discounted
+        # return normalize(r_discounted)
 
     def log_episode_rewards(self, infos) :
         """
