@@ -6,9 +6,14 @@ from torch.distributions import Categorical
 
 # todo: handle .cuda() on a high-level, not in each network separately
 
-class ConvBlock(nn.Module) :
+def init(module, weight_init, bias_init, gain=1):
+    weight_init(module.weight.data, gain=gain)
+    bias_init(module.bias.data)
+    return module
 
-    def __init__(self, ch_in=4) :
+class ConvBlock(nn.Module):
+
+    def __init__(self, ch_in=4):
         """
         A basic block of convolutional layers,
         consisting: - 4 Conv2d
@@ -26,13 +31,15 @@ class ConvBlock(nn.Module) :
         self.stride = 2
         self.pad = self.size // 2
 
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0), nn.init.calculate_gain('leaky_relu'))
         # layers
-        self.conv1 = nn.Conv2d(ch_in, self.num_filter, self.size, self.stride, self.pad)
-        self.conv2 = nn.Conv2d(self.num_filter, self.num_filter, self.size, self.stride, self.pad)
-        self.conv3 = nn.Conv2d(self.num_filter, self.num_filter, self.size, self.stride, self.pad)
-        self.conv4 = nn.Conv2d(self.num_filter, self.num_filter, self.size, self.stride, self.pad)
+        self.conv1 = init_(nn.Conv2d(ch_in, self.num_filter, self.size, self.stride, self.pad))
+        self.conv2 = init_(nn.Conv2d(self.num_filter, self.num_filter, self.size, self.stride, self.pad))
+        self.conv3 = init_(nn.Conv2d(self.num_filter, self.num_filter, self.size, self.stride, self.pad))
+        self.conv4 = init_(nn.Conv2d(self.num_filter, self.num_filter, self.size, self.stride, self.pad))
 
-    def forward(self, x) :
+    def forward(self, x):
         x = F.leaky_relu(self.conv1(x))
         x = F.leaky_relu(self.conv2(x))
         x = F.leaky_relu(self.conv3(x))
@@ -42,8 +49,8 @@ class ConvBlock(nn.Module) :
         # return torch.flatten(x)
         return x.view(x.shape[0], -1)  # retain batch size
 
-class FeatureEncoderNet(nn.Module) :
-    def __init__(self, n_stack, in_size, is_lstm=True) :
+class FeatureEncoderNet(nn.Module):
+    def __init__(self, n_stack, in_size, is_lstm=True):
         """
         Network for feature encoding
 
@@ -58,12 +65,14 @@ class FeatureEncoderNet(nn.Module) :
         self.is_lstm = is_lstm  # indicates whether the LSTM is needed
 
         # layers
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0))
         self.conv = ConvBlock(ch_in=n_stack)
-        self.lin = nn.Linear(self.in_size, self.h1)
-        if self.is_lstm :
+        # self.lin = init_(nn.Linear(self.in_size, self.h1))
+        if self.is_lstm:
             self.lstm = nn.LSTMCell(input_size=self.in_size, hidden_size=self.h1)
 
-    def reset_lstm(self, buf_size=None, reset_indices=None) :
+    def reset_lstm(self, buf_size=None, reset_indices=None):
         """
         Resets the inner state of the LSTMCell
 
@@ -71,20 +80,20 @@ class FeatureEncoderNet(nn.Module) :
         :param buf_size: buffer size (needed to generate the correct hidden state size)
         :return:
         """
-        if self.is_lstm :
-            with torch.no_grad() :
-                if reset_indices is None :
+        if self.is_lstm:
+            with torch.no_grad():
+                if reset_indices is None:
                     self.h_t1 = self.c_t1 = torch.zeros(buf_size,
                                                         self.h1).cuda() if torch.cuda.is_available() else torch.zeros(
                             buf_size,
                             self.h1)
-                else :
+                else:
                     resetTensor = torch.from_numpy(reset_indices.astype(np.uint8))
-                    if resetTensor.sum() :
+                    if resetTensor.sum():
                         self.h_t1 = (1 - resetTensor.view(-1, 1)).float().cuda() * self.h_t1
                         self.c_t1 = (1 - resetTensor.view(-1, 1)).float().cuda() * self.c_t1
 
-    def forward(self, x) :
+    def forward(self, x):
         """
         In: [s_t]
             Current state (i.e. pixels) -> 1 channel image is needed
@@ -97,18 +106,18 @@ class FeatureEncoderNet(nn.Module) :
         """
         x = self.conv(x)
 
-        return self.lin(x)
+        # return self.lin(x)
 
-        if self.is_lstm :
+        if self.is_lstm:
             x = x.view(-1, self.in_size)
             self.h_t1, self.c_t1 = self.lstm(x, (self.h_t1, self.c_t1))  # h_t1 is the output
             return self.h_t1  # [:, -1, :]#.reshape(-1)
 
-        else :
+        else:
             return x.view(-1, self.in_size)
 
-class InverseNet(nn.Module) :
-    def __init__(self, num_actions, feat_size=288) :
+class InverseNet(nn.Module):
+    def __init__(self, num_actions, feat_size=288):
         """
         Network for the inverse dynamics
 
@@ -123,10 +132,12 @@ class InverseNet(nn.Module) :
         self.num_actions = num_actions
 
         # layers
-        self.fc1 = nn.Linear(self.feat_size * 2, self.fc_hidden)
-        self.fc2 = nn.Linear(self.fc_hidden, self.num_actions)
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0))
+        self.fc1 = init_(nn.Linear(self.feat_size * 2, self.fc_hidden))
+        self.fc2 = init_(nn.Linear(self.fc_hidden, self.num_actions))
 
-    def forward(self, x) :
+    def forward(self, x):
         """
         In: torch.cat((phi(s_t), phi(s_{t+1}), 1)
             Current and next states transformed into the feature space,
@@ -141,9 +152,9 @@ class InverseNet(nn.Module) :
         """
         return self.fc2(self.fc1(x))
 
-class ForwardNet(nn.Module) :
+class ForwardNet(nn.Module):
 
-    def __init__(self, in_size) :
+    def __init__(self, in_size):
         """
         Network for the forward dynamics
 
@@ -157,10 +168,12 @@ class ForwardNet(nn.Module) :
         self.out_size = 288
 
         # layers
-        self.fc1 = nn.Linear(self.in_size, self.fc_hidden)
-        self.fc2 = nn.Linear(self.fc_hidden, self.out_size)
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0))
+        self.fc1 = init_(nn.Linear(self.in_size, self.fc_hidden))
+        self.fc2 = init_(nn.Linear(self.fc_hidden, self.out_size))
 
-    def forward(self, x) :
+    def forward(self, x):
         """
         In: torch.cat((phi(s_t), a_t), 1)
             Current state transformed into the feature space,
@@ -175,8 +188,8 @@ class ForwardNet(nn.Module) :
         """
         return self.fc2(self.fc1(x))
 
-class AdversarialHead(nn.Module) :
-    def __init__(self, feat_size, num_actions) :
+class AdversarialHead(nn.Module):
+    def __init__(self, feat_size, num_actions):
         """
         Network for exploiting the forward and inverse dynamics
 
@@ -193,7 +206,7 @@ class AdversarialHead(nn.Module) :
         self.fwd_net = ForwardNet(self.feat_size + self.num_actions)
         self.inv_net = InverseNet(self.num_actions, self.feat_size)
 
-    def forward(self, phi_t, phi_t1, a_t) :
+    def forward(self, phi_t, phi_t1, a_t):
         """
 
         :param phi_t: current encoded state
@@ -215,53 +228,53 @@ class AdversarialHead(nn.Module) :
 
         return phi_t1_hat, a_t_hat
 
-# class ICMNet(nn.Module) :
-#     def __init__(self, n_stack, num_actions, in_size=288, feat_size=256) :
-#         """
-#         Network implementing the Intrinsic Curiosity Module (ICM) of https://arxiv.org/abs/1705.05363
-#
-#         :param n_stack: number of frames stacked
-#         :param num_actions: dimensionality of the action space, pass env.action_space.n
-#         :param in_size: input size of the AdversarialHeads
-#         :param feat_size: size of the feature space
-#         """
-#         super().__init__()
-#
-#         # constants
-#         self.in_size = in_size  # pixels i.e. state
-#         self.feat_size = feat_size
-#         self.num_actions = num_actions
-#
-#         # networks
-#         self.feat_enc_net = FeatureEncoderNet(n_stack, self.in_size, is_lstm=False)
-#         self.pred_net = AdversarialHead(self.in_size, self.num_actions)  # goal: minimize prediction error
-#         self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
-#         # (i.e. predict states which can contain new information)
-#
-#     def forward(self, s_t, s_t1, a_t) :
-#         """
-#
-#         phi_t: current encoded state
-#         phi_t1: next encoded state
-#
-#         :param s_t: current state
-#         :param s_t1: next state
-#         :param a_t: current action
-#         :return:
-#         """
-#
-#         """Encode the states"""
-#         phi_t = self.feat_enc_net(s_t)
-#         phi_t1 = self.feat_enc_net(s_t1)
-#
-#         """ HERE COMES THE NEW THING (currently commented out)"""
-#         phi_t1_pred, a_t_pred = self.pred_net(phi_t, phi_t1, a_t)
-#         # phi_t1_policy, a_t_policy = self.policy_net_net(phi_t, phi_t1, a_t)
-#
-#         return phi_t1, phi_t1_pred, a_t_pred  # (phi_t1_pred, a_t_pred), (phi_t1_policy, a_t_policy)
+class ICMNet(nn.Module):
+    def __init__(self, n_stack, num_actions, in_size=288, feat_size=256):
+        """
+        Network implementing the Intrinsic Curiosity Module (ICM) of https://arxiv.org/abs/1705.05363
 
-class A2CNet(nn.Module) :
-    def __init__(self, n_stack, num_envs, num_actions, in_size=288, writer=None) :
+        :param n_stack: number of frames stacked
+        :param num_actions: dimensionality of the action space, pass env.action_space.n
+        :param in_size: input size of the AdversarialHeads
+        :param feat_size: size of the feature space
+        """
+        super().__init__()
+
+        # constants
+        self.in_size = in_size  # pixels i.e. state
+        self.feat_size = feat_size
+        self.num_actions = num_actions
+
+        # networks
+        self.feat_enc_net = FeatureEncoderNet(n_stack, self.in_size, is_lstm=False)
+        self.pred_net = AdversarialHead(self.in_size, self.num_actions)  # goal: minimize prediction error
+        self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
+        # (i.e. predict states which can contain new information)
+
+    def forward(self, s_t, s_t1, a_t):
+        """
+
+        phi_t: current encoded state
+        phi_t1: next encoded state
+
+        :param s_t: current state
+        :param s_t1: next state
+        :param a_t: current action
+        :return:
+        """
+
+        """Encode the states"""
+        phi_t = self.feat_enc_net(s_t)
+        phi_t1 = self.feat_enc_net(s_t1)
+
+        """ HERE COMES THE NEW THING (currently commented out)"""
+        phi_t1_pred, a_t_pred = self.pred_net(phi_t, phi_t1, a_t)
+        # phi_t1_policy, a_t_policy = self.policy_net_net(phi_t, phi_t1, a_t)
+
+        return phi_t1, phi_t1_pred, a_t_pred  # (phi_t1_pred, a_t_pred), (phi_t1_policy, a_t_policy)
+
+class A2CNet(nn.Module):
+    def __init__(self, n_stack, num_envs, num_actions, in_size=288, writer=None):
         """
         Implementation of the Advantage Actor-Critic (A2C) network
 
@@ -280,15 +293,18 @@ class A2CNet(nn.Module) :
         self.num_actions = num_actions
 
         # networks
-        self.feat_enc_net = FeatureEncoderNet(n_stack, self.in_size, is_lstm=False)
-        self.actor = nn.Linear(self.feat_enc_net.h1, self.num_actions)  # estimates what to do
-        self.critic = nn.Linear(self.feat_enc_net.h1,
-                                1)  # estimates how good the value function (how good the current state is)
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0))
+
+        self.feat_enc_net = FeatureEncoderNet(n_stack, self.in_size)
+        self.actor = init_(nn.Linear(self.feat_enc_net.h1, self.num_actions))  # estimates what to do
+        self.critic = init_(nn.Linear(self.feat_enc_net.h1,
+                                      1))  # estimates how good the value function (how good the current state is)
 
         # init LSTM buffers with the number of the environments
         self._set_recurrent_buffers(num_envs)
 
-    def _set_recurrent_buffers(self, buf_size) :
+    def _set_recurrent_buffers(self, buf_size):
         """
         Initializes LSTM buffers with the proper size
 
@@ -297,7 +313,7 @@ class A2CNet(nn.Module) :
         """
         self.feat_enc_net.reset_lstm(buf_size=buf_size)
 
-    def reset_recurrent_buffers(self, reset_indices) :
+    def reset_recurrent_buffers(self, reset_indices):
         """
 
         :param reset_indices: boolean numpy array containing True at the indices which
@@ -306,7 +322,7 @@ class A2CNet(nn.Module) :
         """
         self.feat_enc_net.reset_lstm(reset_indices=reset_indices)
 
-    def forward(self, s_t) :
+    def forward(self, s_t):
         """
 
         phi_t: current encoded state
@@ -322,18 +338,18 @@ class A2CNet(nn.Module) :
         policy = self.actor(phi_t)
         value = self.critic(phi_t)
 
-        #self.writer.add_scalar("phi_t", phi_t.mean().item(), global_step=self.num_step)
-        self.writer.add_histogram("phi_t", phi_t.detach(), global_step=self.num_step)
-        #self.writer.add_scalar("policy", policy.mean().item(), global_step=self.num_step)
-        self.writer.add_histogram("policy", policy.detach(), global_step=self.num_step)
-        #self.writer.add_scalar("value", value.mean().item(), global_step=self.num_step)
-        self.writer.add_histogram("value", value.detach(), global_step=self.num_step)
+        # self.writer.add_scalar("phi_t", phi_t.mean().item())
+        self.writer.add_histogram("phi_t", phi_t.detach())
+        # self.writer.add_scalar("policy", policy.mean().item())
+        self.writer.add_histogram("policy", policy.detach())
+        # self.writer.add_scalar("value", value.mean().item())
+        self.writer.add_histogram("value", value.detach())
 
         self.num_step += 1
 
         return policy, torch.squeeze(value)
 
-    def get_action(self, s_t) :
+    def get_action(self, s_t):
         """
         Method for selecting the next action
 
@@ -351,4 +367,4 @@ class A2CNet(nn.Module) :
         cat = Categorical(action_prob)
         a_t = cat.sample()
 
-        return (a_t, cat.log_prob(a_t), value)
+        return (a_t, cat.log_prob(a_t), cat.entropy().mean(), value)
