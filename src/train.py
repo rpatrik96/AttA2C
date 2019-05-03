@@ -1,43 +1,51 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from storage import RolloutStorage
+import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
+
+from storage import RolloutStorage
 
 # todo: model save
 
 class Runner(object):
 
-    def __init__(self, net, env, optimizer, num_envs, rollout_size=5, num_updates=3000000, is_cuda=True):
+    def __init__(self, net, env, num_envs, n_stack, rollout_size=5, num_updates=3000000, is_cuda=True, seed=42):
         super().__init__()
 
         # constants
         self.num_envs = num_envs
         self.rollout_size = rollout_size
         self.num_updates = num_updates
+        self.n_stack = n_stack
+        self.seed = seed
 
         self.max_grad_norm = 0.5
 
         # loss scaling coefficients
-        self.entropy_coeff = 0.02
-        self.value_coeff = 0.5
-        torch.autograd.set_detect_anomaly(True)
-
         self.is_cuda = torch.cuda.is_available() and is_cuda
 
         # objects
+        """Tensorboard logger"""
         self.writer = SummaryWriter(comment="grads", log_dir="../../log/own")
-        self.net = net
-        self.net.writer = self.writer
+
+        """Environment"""
         self.env = env
-        self.optimizer = optimizer
-        self.storage = RolloutStorage(self.rollout_size, self.num_envs, (84, 84), 4, self.is_cuda)
+
+        self.storage = RolloutStorage(self.rollout_size, self.num_envs, self.env.observation_space.shape[0:-1],
+                                      self.n_stack, is_cuda=self.is_cuda, writer=self.writer)
+
+        """Network"""
+        self.net = net
+
+        self.net.a2c.writer = self.writer
         # set_trace()
 
         if self.is_cuda:
             self.net = self.net.cuda()
+            # self.icm = self.icm.cuda()
 
-        # self.writer.add_graph(self.net, input_to_model=(self.storage.states[0],))
+        # self.writer.add_graph(self.net, input_to_model=(self.storage.states[0],)) --> not working for LSTMCEll
 
     def train(self):
 
@@ -50,20 +58,27 @@ class Runner(object):
 
             final_value, entropy = self.episode_rollout()
 
-            self.optimizer.zero_grad()
-            loss = -self.entropy_coeff * entropy + self.a2c_loss(self.storage.compute_reward(final_value),
-                                                                 self.storage.log_probs,
-                                                                 self.storage.values)
+            self.net.optimizer.zero_grad()
+
+            feature, feature_pred, a_t_pred = self.net.icm(
+                    self.storage.states[0:-1].view(-1, self.n_stack, *self.storage.frame_shape),
+                    self.storage.states[1:].view(-1, self.n_stack, *self.storage.frame_shape),
+                    self.storage.actions.view(-1))
+
+            # a2c_loss_factor = 0.1
+            loss = self.storage.a2c_loss(final_value, entropy) + self.icm_loss(feature, feature_pred, a_t_pred,
+                                                                               self.storage.actions)
             loss.backward(retain_graph=False)
-            nn.utils.clip_grad_norm_(self.net.parameters(),
-                                     self.max_grad_norm)
+            nn.utils.clip_grad_norm_(self.net.parameters(), self.max_grad_norm)
+
+            self.writer.add_scalar("loss", loss.item())
 
             # set_trace()
             # params = list(self.net.parameters())
             # for i, param in enumerate(params):
             #     self.writer.add_histogram("param_" + str(i) + "_" + str(list(param.grad.shape)), param.grad.detach())
 
-            self.optimizer.step()
+            self.net.optimizer.step()
 
             # it stores a lot of data which let's the graph
             # grow out of memory, so it is crucial to reset
@@ -92,7 +107,7 @@ class Runner(object):
 
             """Interact with the environments """
             # call A2C
-            a_t, log_p_a_t, entropy, value = self.net.get_action(self.storage.get_state(step))
+            a_t, log_p_a_t, entropy, value = self.net.a2c.get_action(self.storage.get_state(step))
 
             episode_entropy += entropy
             # interact
@@ -103,41 +118,30 @@ class Runner(object):
             self.storage.log_episode_rewards(infos)
 
             self.storage.insert(step, rewards, obs, a_t, log_p_a_t, value, dones)
-            self.net.reset_recurrent_buffers(reset_indices=dones)
+            self.net.a2c.reset_recurrent_buffers(reset_indices=dones)
 
         # Note:
         # get the estimate of the final reward
         # that's why we have the CRITIC --> estimate final reward
         # detach, as the final value will only be used as a
         with torch.no_grad():
-            _, _, _, final_value = self.net.get_action(self.storage.get_state(step + 1))
+            _, _, _, final_value = self.net.a2c.get_action(self.storage.get_state(step + 1))
         return final_value, episode_entropy
 
-    def a2c_loss(self, rewards, log_prob, values):
-        # calculate advantage
-        # i.e. how good was the estimate of the value of the current state
-        advantage = rewards - values
+    def icm_loss(self, features, feature_preds, action_preds, actions):
 
-        # weight the deviation of the predicted value (of the state) from the
-        # actual reward (=advantage) with the negative log probability of the action
-        # taken (- needed as log(p) p in [0;1] < 0)
-        policy_loss = (-log_prob * advantage.detach()).mean()
+        # forward loss
+        # measure of how good features can be predicted
+        loss_fwd = F.mse_loss(feature_preds, features)
+        self.writer.add_histogram("icm_features", features.detach())
+        self.writer.add_histogram("icm_feature_preds", feature_preds.detach())
 
-        # the value loss weights the squared difference between the actual
-        # and predicted rewards
-        value_loss = advantage.pow(2).mean()
+        # inverse loss
+        # how good is the action estimate between states
+        loss_inv = F.cross_entropy(action_preds.view(-1, self.net.num_actions), actions.long().view(-1))
 
-        # return the a2c loss
-        # which is the sum of the actor (policy) and critic (advantage) losses
-        # due to the fact that batches can be shorter (e.g. if an env is finished already)
-        # MEAN is used instead of SUM
-        loss = policy_loss + self.value_coeff * value_loss
+        self.writer.add_scalar("loss_fwd", loss_fwd.item())
+        self.writer.add_scalar("loss_inv", loss_inv.item())
 
-        self.writer.add_scalar("loss", loss.item())
-        self.writer.add_scalar("policy_loss", policy_loss.item())
-        self.writer.add_scalar("value_loss", value_loss.item())
-        self.writer.add_histogram("advantage", advantage.detach())
-        self.writer.add_histogram("rewards", rewards.detach())
-        self.writer.add_histogram("action_prob", log_prob.detach())
-
-        return loss
+        # beta = .2
+        return loss_fwd + loss_inv

@@ -65,10 +65,7 @@ class FeatureEncoderNet(nn.Module):
         self.is_lstm = is_lstm  # indicates whether the LSTM is needed
 
         # layers
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0))
         self.conv = ConvBlock(ch_in=n_stack)
-        # self.lin = init_(nn.Linear(self.in_size, self.h1))
         if self.is_lstm:
             self.lstm = nn.LSTMCell(input_size=self.in_size, hidden_size=self.h1)
 
@@ -206,27 +203,35 @@ class AdversarialHead(nn.Module):
         self.fwd_net = ForwardNet(self.feat_size + self.num_actions)
         self.inv_net = InverseNet(self.num_actions, self.feat_size)
 
-    def forward(self, phi_t, phi_t1, a_t):
+    def forward(self, current_feature, next_feature, action):
         """
 
-        :param phi_t: current encoded state
-        :param phi_t1: next encoded state
-        :param a_t: current action
-        :return: phi_t1_hat (estimate of the next state in feature space),
-                 a_t_hat (estimate of the current state)
+        :param current_feature: current encoded state
+        :param next_feature: next encoded state
+        :param action: current action
+        :return: next_feature_pred (estimate of the next state in feature space),
+                 action_pred (estimate of the current action)
         """
 
         """Forward dynamics"""
         # predict next encoded state
-        fwd_in = torch.cat((phi_t, a_t), 1)
-        phi_t1_hat = self.fwd_net(fwd_in)
+
+        # encode the current action into a one-hot vector
+        action_one_hot = torch.zeros(action.shape[0], self.num_actions).scatter_(1, action.long().cpu().view(-1, 1), 1)
+
+        if torch.cuda.is_available():
+            action_one_hot = action_one_hot.cuda()
+        # set_trace()
+
+        fwd_in = torch.cat((current_feature, action_one_hot), 1)
+        next_feature_pred = self.fwd_net(fwd_in)
 
         """Inverse dynamics"""
         # predict the action between s_t and s_t1
-        inv_in = torch.cat((phi_t, phi_t1), 1)
-        a_t_hat = self.inv_net(inv_in)
+        inv_in = torch.cat((current_feature, next_feature), 1)
+        action_pred = self.inv_net(inv_in)
 
-        return phi_t1_hat, a_t_hat
+        return next_feature_pred, action_pred
 
 class ICMNet(nn.Module):
     def __init__(self, n_stack, num_actions, in_size=288, feat_size=256):
@@ -251,27 +256,27 @@ class ICMNet(nn.Module):
         self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
         # (i.e. predict states which can contain new information)
 
-    def forward(self, s_t, s_t1, a_t):
+    def forward(self, current_state, next_state, action):
         """
 
-        phi_t: current encoded state
-        phi_t1: next encoded state
+        feature: current encoded state
+        next_feature: next encoded state
 
-        :param s_t: current state
-        :param s_t1: next state
-        :param a_t: current action
+        :param current_state: current state
+        :param next_state: next state
+        :param action: current action
         :return:
         """
 
         """Encode the states"""
-        phi_t = self.feat_enc_net(s_t)
-        phi_t1 = self.feat_enc_net(s_t1)
+        feature = self.feat_enc_net(current_state)
+        next_feature = self.feat_enc_net(next_state)
 
         """ HERE COMES THE NEW THING (currently commented out)"""
-        phi_t1_pred, a_t_pred = self.pred_net(phi_t, phi_t1, a_t)
-        # phi_t1_policy, a_t_policy = self.policy_net_net(phi_t, phi_t1, a_t)
+        next_feature_pred, action_pred = self.pred_net(feature, next_feature, action)
+        # phi_t1_policy, a_t_policy = self.policy_net_net(feature, next_feature, a_t)
 
-        return phi_t1, phi_t1_pred, a_t_pred  # (phi_t1_pred, a_t_pred), (phi_t1_policy, a_t_policy)
+        return next_feature, next_feature_pred, action_pred  # (next_feature_pred, action_pred), (phi_t1_policy, a_t_policy)
 
 class A2CNet(nn.Module):
     def __init__(self, n_stack, num_envs, num_actions, in_size=288, writer=None):
@@ -322,49 +327,47 @@ class A2CNet(nn.Module):
         """
         self.feat_enc_net.reset_lstm(reset_indices=reset_indices)
 
-    def forward(self, s_t):
+    def forward(self, state):
         """
 
-        phi_t: current encoded state
+        feature: current encoded state
 
-        :param s_t: current state
+        :param state: current state
         :return:
         """
 
         # encode the state
-        phi_t = self.feat_enc_net(s_t)
+        feature = self.feat_enc_net(state)
 
         # calculate policy and value function
-        policy = self.actor(phi_t)
-        value = self.critic(phi_t)
+        policy = self.actor(feature)
+        value = self.critic(feature)
 
-        # self.writer.add_scalar("phi_t", phi_t.mean().item())
-        self.writer.add_histogram("phi_t", phi_t.detach())
-        # self.writer.add_scalar("policy", policy.mean().item())
-        self.writer.add_histogram("policy", policy.detach())
-        # self.writer.add_scalar("value", value.mean().item())
-        self.writer.add_histogram("value", value.detach())
+        if self.writer is not None:
+            self.writer.add_histogram("feature", feature.detach())
+            self.writer.add_histogram("policy", policy.detach())
+            self.writer.add_histogram("value", value.detach())
 
         self.num_step += 1
 
         return policy, torch.squeeze(value)
 
-    def get_action(self, s_t):
+    def get_action(self, state):
         """
         Method for selecting the next action
 
-        :param s_t: current state
-        :return: tuple of (a_t, log_prob_a_t, value)
+        :param state: current state
+        :return: tuple of (action, log_prob_a_t, value)
         """
 
         """Evaluate the A2C"""
-        policy, value = self(s_t)  # use A3C to get policy and value
+        policy, value = self(state)  # use A3C to get policy and value
 
         """Calculate action"""
         # 1. convert policy outputs into probabilities
         # 2. sample the categorical  distribution represented by these probabilities
         action_prob = F.softmax(policy, dim=-1)
         cat = Categorical(action_prob)
-        a_t = cat.sample()
+        action = cat.sample()
 
-        return (a_t, cat.log_prob(a_t), cat.entropy().mean(), value)
+        return (action, cat.log_prob(action), cat.entropy().mean(), value)

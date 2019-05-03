@@ -3,8 +3,9 @@ from collections import deque
 import numpy as np
 import torch
 
-class RolloutStorage(object) :
-    def __init__(self, rollout_size, num_envs, frame_shape, n_stack, is_cuda=True) :
+class RolloutStorage(object):
+    def __init__(self, rollout_size, num_envs, frame_shape, n_stack, feature_size=288, is_cuda=True, value_coeff=0.5,
+                 entropy_coeff=0.02, writer=None):
         """
 
         :param rollout_size: number of steps after the policy gets updated
@@ -19,13 +20,18 @@ class RolloutStorage(object) :
         self.num_envs = num_envs
         self.n_stack = n_stack
         self.frame_shape = frame_shape
+        self.feature_size = feature_size
         self.is_cuda = is_cuda
         self.episode_rewards = deque(maxlen=10)
+
+        self.value_coeff = value_coeff
+        self.entropy_coeff = entropy_coeff
+        self.writer = writer
 
         # initialize the buffers with zeros
         self.reset_buffers()
 
-    def _generate_buffer(self, size) :
+    def _generate_buffer(self, size):
         """
         Generates a `torch.zeros` tensor with the specified size.
 
@@ -33,12 +39,12 @@ class RolloutStorage(object) :
         :return:  tensor filled with zeros of 'size'
                     on the device specified by self.is_cuda
         """
-        if self.is_cuda :
+        if self.is_cuda:
             return torch.zeros(size).cuda()
-        else :
+        else:
             return torch.zeros(size)
 
-    def reset_buffers(self) :
+    def reset_buffers(self):
         """
         Creates and/or resets the buffers - each of size (rollout_size, num_envs) -
         storing: - rewards
@@ -54,13 +60,17 @@ class RolloutStorage(object) :
         :return:
         """
         self.rewards = self._generate_buffer((self.rollout_size, self.num_envs))
+
+        # here the +1 comes from the fact that we need an initial state at the beginning of each rollout
+        # which is the last state of the previous rollout
         self.states = self._generate_buffer((self.rollout_size + 1, self.num_envs, self.n_stack, *self.frame_shape))
+
         self.actions = self._generate_buffer((self.rollout_size, self.num_envs))
         self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
         self.values = self._generate_buffer((self.rollout_size, self.num_envs))
         self.dones = self._generate_buffer((self.rollout_size, self.num_envs))
 
-    def after_update(self) :
+    def after_update(self):
         """
         Cleaning up buffers after a rollout is finished and
         copying the last state to index 0
@@ -71,7 +81,7 @@ class RolloutStorage(object) :
         self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
         self.values = self._generate_buffer((self.rollout_size, self.num_envs))
 
-    def get_state(self, step) :
+    def get_state(self, step):
         """
         Returns the observation of index step as a cloned object,
         otherwise torch.nn.autograd cannot calculate the gradients
@@ -81,47 +91,43 @@ class RolloutStorage(object) :
         """
         return self.states[step].clone()
 
-    def obs2tensor(self, obs) :
+    def obs2tensor(self, obs):
         # 1. reorder dimensions for nn.Conv2d (batch, ch_in, width, height)
         # 2. convert numpy array to _normalized_ FloatTensor
         tensor = torch.from_numpy(obs.astype(np.float32).transpose((0, 3, 1, 2))) / 255.
         return tensor.cuda() if self.is_cuda else tensor
 
-    def insert(self, step, rewards, obs, actions, log_probs, values, dones) :
+    def insert(self, step, reward, obs, action, log_prob, value, dones):
         """
         Inserts new data into the log for each environment at index step
 
         :param step: index of the step
-        :param rewards: numpy array of the rewards
+        :param reward: numpy array of the rewards
         :param obs: observation as a numpy array
-        :param actions: tensor of the actions
-        :param log_probs: tensor of the log probabilities
-        :param values: tensor of the values
+        :param action: tensor of the actions
+        :param log_prob: tensor of the log probabilities
+        :param value: tensor of the values
         :param dones: numpy array of the dones (boolean)
         :return:
         """
-        self.rewards[step].copy_(torch.from_numpy(rewards))
+        self.rewards[step].copy_(torch.from_numpy(reward))
         self.states[step + 1].copy_(self.obs2tensor(obs))
-        self.actions[step].copy_(actions)
-        self.log_probs[step].copy_(log_probs)
-        self.values[step].copy_(values)
+        self.actions[step].copy_(action)
+        self.log_probs[step].copy_(log_prob)
+        self.values[step].copy_(value)
         self.dones[step].copy_(torch.ByteTensor(dones.data))
 
-    def compute_reward(self, final_value, discount=0.99) :
+    def _discount_rewards(self, final_value, discount=0.99):
         """
         Computes the discounted reward while respecting - if the episode
         is not done - the estimate of the final reward from that state (i.e.
         the value function passed as the argument `final_value`)
 
-        :param env_idx: index of the environment
+
         :param final_value: estimate of the final reward by the critic
         :param discount: discount factor
         :return:
         """
-
-        # normalization function
-        def normalize(data) :
-            return (data - data.mean()) / (data.std() + 10e-9)
 
         """Setup"""
         # placeholder tensor to avoid dynamic allocation with insert
@@ -137,7 +143,7 @@ class RolloutStorage(object) :
         # the episode is not finished, thus the (1-x)
         R = self._generate_buffer(self.num_envs).masked_scatter((1 - self.dones[-1]).byte(), final_value)
 
-        for i in reversed(range(self.rollout_size)) :
+        for i in reversed(range(self.rollout_size)):
             # the reward can only change if we are within the episode
             # i.e. while done==True, we use 0
             # NOTE: this update rule also can handle, if a new episode has started during the rollout
@@ -148,12 +154,39 @@ class RolloutStorage(object) :
 
             r_discounted[i] = R
 
-        # print(r_discounted)
-        # normalize and return
         return r_discounted
-        # return normalize(r_discounted)
 
-    def log_episode_rewards(self, infos) :
+    def a2c_loss(self, final_value, entropy):
+        # calculate advantage
+        # i.e. how good was the estimate of the value of the current state
+        rewards = self._discount_rewards(final_value)
+        advantage = rewards - self.values
+
+        # weight the deviation of the predicted value (of the state) from the
+        # actual reward (=advantage) with the negative log probability of the action taken
+        policy_loss = (-self.log_probs * advantage.detach()).mean()
+
+        # the value loss weights the squared difference between the actual
+        # and predicted rewards
+        value_loss = advantage.pow(2).mean()
+
+        # return the a2c loss
+        # which is the sum of the actor (policy) and critic (advantage) losses
+        # due to the fact that batches can be shorter (e.g. if an env is finished already)
+        # MEAN is used instead of SUM
+        loss = policy_loss + self.value_coeff * value_loss - self.entropy_coeff * entropy
+
+        if self.writer is not None:
+            self.writer.add_scalar("a2c_loss", loss.item())
+            self.writer.add_scalar("policy_loss", policy_loss.item())
+            self.writer.add_scalar("value_loss", value_loss.item())
+            self.writer.add_histogram("advantage", advantage.detach())
+            self.writer.add_histogram("rewards", rewards.detach())
+            self.writer.add_histogram("action_prob", self.log_probs.detach())
+
+        return loss
+
+    def log_episode_rewards(self, infos):
         """
         Logs the episode rewards
 
@@ -161,15 +194,16 @@ class RolloutStorage(object) :
         :return:
         """
 
-        for info in infos :
-            if 'episode' in info.keys() :
+        for info in infos:
+            if 'episode' in info.keys():
                 self.episode_rewards.append(info['episode']['r'])
 
-    def print_reward_stats(self) :
-        if len(self.episode_rewards) > 1 :
+    def print_reward_stats(self):
+        if len(self.episode_rewards) > 1:
             print(
-                "Mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n".format(np.mean(self.episode_rewards),
-                                                                                          np.median(
-                                                                                              self.episode_rewards),
-                                                                                          np.min(self.episode_rewards),
-                                                                                          np.max(self.episode_rewards)))
+                    "Mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n".format(
+                            np.mean(self.episode_rewards),
+                            np.median(
+                                    self.episode_rewards),
+                            np.min(self.episode_rewards),
+                            np.max(self.episode_rewards)))
