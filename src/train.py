@@ -6,11 +6,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 from storage import RolloutStorage
 
-# todo: model save
-
 class Runner(object):
 
-    def __init__(self, net, env, num_envs, n_stack, rollout_size=5, num_updates=3000000, is_cuda=True, seed=42):
+    def __init__(self, net, env, num_envs, n_stack, rollout_size=5, num_updates=1, is_cuda=True, seed=42):
         super().__init__()
 
         # constants
@@ -27,7 +25,7 @@ class Runner(object):
 
         # objects
         """Tensorboard logger"""
-        self.writer = SummaryWriter(comment="grads", log_dir="../../log/own")
+        self.writer = SummaryWriter(comment="grads", log_dir="../../log/test")
 
         """Environment"""
         self.env = env
@@ -65,9 +63,21 @@ class Runner(object):
                     self.storage.states[1:].view(-1, self.n_stack, *self.storage.frame_shape),
                     self.storage.actions.view(-1))
 
+
+
+            # from pdb import set_trace
+            # set_trace()
+            # curiosity loss
+            # how bad it can predict the next state
+            # todo: itt az indexelést meg kell nézni, mert nehogy a k+1. predből a k. state-t vonjuk ki -> most rossz
+            curiosity_loss = (self.storage.features[1:,:,:].view(-1, self.storage.feature_size) - feature_pred.detach()).pow(2).mean()
+
+
+
             # a2c_loss_factor = 0.1
-            loss = self.storage.a2c_loss(final_value, entropy) + self.icm_loss(feature, feature_pred, a_t_pred,
-                                                                               self.storage.actions)
+            loss = self.storage.a2c_loss(final_value, entropy) + self.icm_loss(feature, feature_pred,
+                                                                               a_t_pred,
+                                                                               self.storage.actions) - curiosity_loss
             loss.backward(retain_graph=False)
             nn.utils.clip_grad_norm_(self.net.parameters(), self.max_grad_norm)
 
@@ -107,7 +117,7 @@ class Runner(object):
 
             """Interact with the environments """
             # call A2C
-            a_t, log_p_a_t, entropy, value = self.net.a2c.get_action(self.storage.get_state(step))
+            a_t, log_p_a_t, entropy, value, a2c_features = self.net.a2c.get_action(self.storage.get_state(step))
 
             episode_entropy += entropy
             # interact
@@ -117,15 +127,17 @@ class Runner(object):
             # save episode reward
             self.storage.log_episode_rewards(infos)
 
-            self.storage.insert(step, rewards, obs, a_t, log_p_a_t, value, dones)
+            self.storage.insert(step, rewards, obs, a_t, log_p_a_t, value, dones, a2c_features)
             self.net.a2c.reset_recurrent_buffers(reset_indices=dones)
 
         # Note:
         # get the estimate of the final reward
         # that's why we have the CRITIC --> estimate final reward
         # detach, as the final value will only be used as a
-        with torch.no_grad():
-            _, _, _, final_value = self.net.a2c.get_action(self.storage.get_state(step + 1))
+        # with torch.no_grad():
+        _, _, _, final_value, final_features = self.net.a2c.get_action(self.storage.get_state(step + 1))
+
+        self.storage.features[step+1].copy_(final_features)
         return final_value, episode_entropy
 
     def icm_loss(self, features, feature_preds, action_preds, actions):

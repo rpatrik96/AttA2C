@@ -61,7 +61,7 @@ class FeatureEncoderNet(nn.Module):
         super().__init__()
         # constants
         self.in_size = in_size
-        self.h1 = 256
+        self.h1 = 288 #todo: changed to 288 from 256
         self.is_lstm = is_lstm  # indicates whether the LSTM is needed
 
         # layers
@@ -269,6 +269,7 @@ class ICMNet(nn.Module):
         """
 
         """Encode the states"""
+        #todo: itt lehet a feature-öket kellene slice-olni, mert most kétszer lesz feature conversion
         feature = self.feat_enc_net(current_state)
         next_feature = self.feat_enc_net(next_state)
 
@@ -291,7 +292,6 @@ class A2CNet(nn.Module):
         super().__init__()
 
         self.writer = writer
-        self.num_step = 0
 
         # constants
         self.in_size = in_size  # in_size
@@ -348,9 +348,8 @@ class A2CNet(nn.Module):
             self.writer.add_histogram("policy", policy.detach())
             self.writer.add_histogram("value", value.detach())
 
-        self.num_step += 1
 
-        return policy, torch.squeeze(value)
+        return policy, torch.squeeze(value), feature
 
     def get_action(self, state):
         """
@@ -361,7 +360,7 @@ class A2CNet(nn.Module):
         """
 
         """Evaluate the A2C"""
-        policy, value = self(state)  # use A3C to get policy and value
+        policy, value, feature = self(state)  # use A3C to get policy and value
 
         """Calculate action"""
         # 1. convert policy outputs into probabilities
@@ -370,4 +369,4 @@ class A2CNet(nn.Module):
         cat = Categorical(action_prob)
         action = cat.sample()
 
-        return (action, cat.log_prob(action), cat.entropy().mean(), value)
+        return (action, cat.log_prob(action), cat.entropy().mean(), value, feature) # ide is jön egy feature bypass a self(state-ből)

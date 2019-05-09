@@ -2,6 +2,7 @@ from collections import deque
 
 import numpy as np
 import torch
+from torch.cuda.profiler import cudaOutputMode
 
 class RolloutStorage(object):
     def __init__(self, rollout_size, num_envs, frame_shape, n_stack, feature_size=288, is_cuda=True, value_coeff=0.5,
@@ -64,6 +65,7 @@ class RolloutStorage(object):
         # here the +1 comes from the fact that we need an initial state at the beginning of each rollout
         # which is the last state of the previous rollout
         self.states = self._generate_buffer((self.rollout_size + 1, self.num_envs, self.n_stack, *self.frame_shape))
+        self.features = self._generate_buffer((self.rollout_size + 1, self.num_envs, self.feature_size))
 
         self.actions = self._generate_buffer((self.rollout_size, self.num_envs))
         self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
@@ -77,6 +79,7 @@ class RolloutStorage(object):
         :return:
         """
         self.states[0].copy_(self.states[-1])
+        self.features = self._generate_buffer((self.rollout_size + 1 , self.num_envs, self.feature_size))
         self.actions = self._generate_buffer((self.rollout_size, self.num_envs))
         self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
         self.values = self._generate_buffer((self.rollout_size, self.num_envs))
@@ -97,10 +100,11 @@ class RolloutStorage(object):
         tensor = torch.from_numpy(obs.astype(np.float32).transpose((0, 3, 1, 2))) / 255.
         return tensor.cuda() if self.is_cuda else tensor
 
-    def insert(self, step, reward, obs, action, log_prob, value, dones):
+    def insert(self, step, reward, obs, action, log_prob, value, dones, features):
         """
         Inserts new data into the log for each environment at index step
 
+        :param features:
         :param step: index of the step
         :param reward: numpy array of the rewards
         :param obs: observation as a numpy array
@@ -112,6 +116,7 @@ class RolloutStorage(object):
         """
         self.rewards[step].copy_(torch.from_numpy(reward))
         self.states[step + 1].copy_(self.obs2tensor(obs))
+        self.features[step].copy_(features)
         self.actions[step].copy_(action)
         self.log_probs[step].copy_(log_prob)
         self.values[step].copy_(value)
