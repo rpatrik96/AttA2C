@@ -50,6 +50,7 @@ class RolloutStorage(object):
         Creates and/or resets the buffers - each of size (rollout_size, num_envs) -
         storing: - rewards
                  - states
+                 - features
                  - actions
                  - log probabilities
                  - values
@@ -65,6 +66,9 @@ class RolloutStorage(object):
         # here the +1 comes from the fact that we need an initial state at the beginning of each rollout
         # which is the last state of the previous rollout
         self.states = self._generate_buffer((self.rollout_size + 1, self.num_envs, self.n_stack, *self.frame_shape))
+
+        # the features are needed for the curiosity loss, an addtion to the A2C+ICM structure
+        # +1 element is needed, as the MSE to the prediction of the next state is calculated
         self.features = self._generate_buffer((self.rollout_size + 1, self.num_envs, self.feature_size))
 
         self.actions = self._generate_buffer((self.rollout_size, self.num_envs))
@@ -104,7 +108,6 @@ class RolloutStorage(object):
         """
         Inserts new data into the log for each environment at index step
 
-        :param features:
         :param step: index of the step
         :param reward: numpy array of the rewards
         :param obs: observation as a numpy array
@@ -112,6 +115,7 @@ class RolloutStorage(object):
         :param log_prob: tensor of the log probabilities
         :param value: tensor of the values
         :param dones: numpy array of the dones (boolean)
+        :param features: tensor of the features
         :return:
         """
         self.rewards[step].copy_(torch.from_numpy(reward))

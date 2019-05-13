@@ -256,22 +256,25 @@ class ICMNet(nn.Module):
         self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
         # (i.e. predict states which can contain new information)
 
-    def forward(self, current_state, next_state, action):
+    def forward(self, num_envs, states, action):
         """
 
         feature: current encoded state
         next_feature: next encoded state
 
-        :param current_state: current state
-        :param next_state: next state
+        :param num_envs: number of the environments
+        :param states: tensor of the states
         :param action: current action
         :return:
         """
 
         """Encode the states"""
-        #todo: itt lehet a feature-öket kellene slice-olni, mert most kétszer lesz feature conversion
-        feature = self.feat_enc_net(current_state)
-        next_feature = self.feat_enc_net(next_state)
+        features = self.feat_enc_net(states)
+
+        # slice features
+        # this way, we can spare one forward pass
+        feature = features[0:-num_envs]
+        next_feature = features[num_envs:]
 
         """ HERE COMES THE NEW THING (currently commented out)"""
         next_feature_pred, action_pred = self.pred_net(feature, next_feature, action)

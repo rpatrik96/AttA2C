@@ -8,7 +8,7 @@ from storage import RolloutStorage
 
 class Runner(object):
 
-    def __init__(self, net, env, num_envs, n_stack, rollout_size=5, num_updates=1, is_cuda=True, seed=42):
+    def __init__(self, net, env, num_envs, n_stack, rollout_size=5, num_updates=2500000, is_cuda=True, seed=42):
         super().__init__()
 
         # constants
@@ -19,13 +19,15 @@ class Runner(object):
         self.seed = seed
 
         self.max_grad_norm = 0.5
+        self.curiosity_coeff = 0.03
+        self.icm_beta = 0.2
 
         # loss scaling coefficients
         self.is_cuda = torch.cuda.is_available() and is_cuda
 
         # objects
         """Tensorboard logger"""
-        self.writer = SummaryWriter(comment="grads", log_dir="../../log/test")
+        self.writer = SummaryWriter(comment="grads", log_dir="../../log/curiosity_loss")
 
         """Environment"""
         self.env = env
@@ -37,7 +39,6 @@ class Runner(object):
         self.net = net
 
         self.net.a2c.writer = self.writer
-        # set_trace()
 
         if self.is_cuda:
             self.net = self.net.cuda()
@@ -58,32 +59,34 @@ class Runner(object):
 
             self.net.optimizer.zero_grad()
 
+            """ICM prediction """
+            # tensors for the curiosity-based loss
+            # feature, feature_pred: fwd_loss
+            # a_t_pred: inv_loss
             feature, feature_pred, a_t_pred = self.net.icm(
-                    self.storage.states[0:-1].view(-1, self.n_stack, *self.storage.frame_shape),
-                    self.storage.states[1:].view(-1, self.n_stack, *self.storage.frame_shape),
+                    self.num_envs,
+                    self.storage.states.view(-1, self.n_stack, *self.storage.frame_shape),
                     self.storage.actions.view(-1))
 
-
-
-            # from pdb import set_trace
-            # set_trace()
-            # curiosity loss
+            """Curiosity loss"""
             # how bad it can predict the next state
-            # todo: itt az indexelést meg kell nézni, mert nehogy a k+1. predből a k. state-t vonjuk ki -> most rossz
-            curiosity_loss = (self.storage.features[1:,:,:].view(-1, self.storage.feature_size) - feature_pred.detach()).pow(2).mean()
+            curiosity_loss = (self.storage.features[1:, :, :]
+                              .view(-1, self.storage.feature_size) - feature_pred.detach()).pow(2).mean()
 
+            self.writer.add_scalar("curiosity_loss", curiosity_loss.item())
 
+            """Assemble loss"""
+            loss = self.storage.a2c_loss(final_value, entropy) \
+                   + self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions) \
+                   - self.curiosity_coeff * curiosity_loss
 
-            # a2c_loss_factor = 0.1
-            loss = self.storage.a2c_loss(final_value, entropy) + self.icm_loss(feature, feature_pred,
-                                                                               a_t_pred,
-                                                                               self.storage.actions) - curiosity_loss
             loss.backward(retain_graph=False)
+
+            # gradient clipping
             nn.utils.clip_grad_norm_(self.net.parameters(), self.max_grad_norm)
 
             self.writer.add_scalar("loss", loss.item())
 
-            # set_trace()
             # params = list(self.net.parameters())
             # for i, param in enumerate(params):
             #     self.writer.add_histogram("param_" + str(i) + "_" + str(list(param.grad.shape)), param.grad.detach())
@@ -134,10 +137,10 @@ class Runner(object):
         # get the estimate of the final reward
         # that's why we have the CRITIC --> estimate final reward
         # detach, as the final value will only be used as a
-        # with torch.no_grad():
-        _, _, _, final_value, final_features = self.net.a2c.get_action(self.storage.get_state(step + 1))
+        with torch.no_grad():
+            _, _, _, final_value, final_features = self.net.a2c.get_action(self.storage.get_state(step + 1))
 
-        self.storage.features[step+1].copy_(final_features)
+        self.storage.features[step + 1].copy_(final_features)
         return final_value, episode_entropy
 
     def icm_loss(self, features, feature_preds, action_preds, actions):
@@ -155,5 +158,4 @@ class Runner(object):
         self.writer.add_scalar("loss_fwd", loss_fwd.item())
         self.writer.add_scalar("loss_inv", loss_inv.item())
 
-        # beta = .2
         return loss_fwd + loss_inv
