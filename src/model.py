@@ -4,12 +4,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
 
-# todo: handle .cuda() on a high-level, not in each network separately
 
 def init(module, weight_init, bias_init, gain=1):
+    """
+
+    :param module: module to initialize
+    :param weight_init: initialization scheme
+    :param bias_init: bias initialization scheme
+    :param gain: gain for weight initialization
+    :return: initialized module
+    """
     weight_init(module.weight.data, gain=gain)
     bias_init(module.bias.data)
     return module
+
 
 class ConvBlock(nn.Module):
 
@@ -49,6 +57,7 @@ class ConvBlock(nn.Module):
         # return torch.flatten(x)
         return x.view(x.shape[0], -1)  # retain batch size
 
+
 class FeatureEncoderNet(nn.Module):
     def __init__(self, n_stack, in_size, is_lstm=True):
         """
@@ -61,7 +70,7 @@ class FeatureEncoderNet(nn.Module):
         super().__init__()
         # constants
         self.in_size = in_size
-        self.h1 = 288 #todo: changed to 288 from 256
+        self.h1 = 288  # todo: changed to 288 from 256
         self.is_lstm = is_lstm  # indicates whether the LSTM is needed
 
         # layers
@@ -80,15 +89,17 @@ class FeatureEncoderNet(nn.Module):
         if self.is_lstm:
             with torch.no_grad():
                 if reset_indices is None:
-                    self.h_t1 = self.c_t1 = torch.zeros(buf_size,
-                                                        self.h1).cuda() if torch.cuda.is_available() else torch.zeros(
-                            buf_size,
-                            self.h1)
+                    # set device to that of the underlying network
+                    # (it does not matter, the device of which layer is queried)
+                    self.h_t1 = self.c_t1 = torch.zeros(buf_size, self.h1, device=self.lstm.weight_ih.device)
                 else:
-                    resetTensor = torch.from_numpy(reset_indices.astype(np.uint8))
+                    # set device to that of the underlying network
+                    # (it does not matter, the device of which layer is queried)
+                    resetTensor = torch.as_tensor(reset_indices.astype(np.uint8), device=self.lstm.weight_ih.device)
+
                     if resetTensor.sum():
-                        self.h_t1 = (1 - resetTensor.view(-1, 1)).float().cuda() * self.h_t1
-                        self.c_t1 = (1 - resetTensor.view(-1, 1)).float().cuda() * self.c_t1
+                        self.h_t1 = (1 - resetTensor.view(-1, 1)).float() * self.h_t1
+                        self.c_t1 = (1 - resetTensor.view(-1, 1)).float() * self.c_t1
 
     def forward(self, x):
         """
@@ -112,6 +123,7 @@ class FeatureEncoderNet(nn.Module):
 
         else:
             return x.view(-1, self.in_size)
+
 
 class InverseNet(nn.Module):
     def __init__(self, num_actions, feat_size=288):
@@ -149,6 +161,7 @@ class InverseNet(nn.Module):
         """
         return self.fc2(self.fc1(x))
 
+
 class ForwardNet(nn.Module):
 
     def __init__(self, in_size):
@@ -185,6 +198,7 @@ class ForwardNet(nn.Module):
         """
         return self.fc2(self.fc1(x))
 
+
 class AdversarialHead(nn.Module):
     def __init__(self, feat_size, num_actions):
         """
@@ -217,11 +231,9 @@ class AdversarialHead(nn.Module):
         # predict next encoded state
 
         # encode the current action into a one-hot vector
-        action_one_hot = torch.zeros(action.shape[0], self.num_actions).scatter_(1, action.long().cpu().view(-1, 1), 1)
-
-        if torch.cuda.is_available():
-            action_one_hot = action_one_hot.cuda()
-        # set_trace()
+        # set device to that of the underlying network (it does not matter, the device of which layer is queried)
+        action_one_hot = torch.zeros(action.shape[0], self.num_actions, device=self.fwd_net.fc1.weight.device) \
+            .scatter_(1, action.long().view(-1, 1), 1)
 
         fwd_in = torch.cat((current_feature, action_one_hot), 1)
         next_feature_pred = self.fwd_net(fwd_in)
@@ -232,6 +244,7 @@ class AdversarialHead(nn.Module):
         action_pred = self.inv_net(inv_in)
 
         return next_feature_pred, action_pred
+
 
 class ICMNet(nn.Module):
     def __init__(self, n_stack, num_actions, in_size=288, feat_size=256):
@@ -282,6 +295,7 @@ class ICMNet(nn.Module):
 
         return next_feature, next_feature_pred, action_pred  # (next_feature_pred, action_pred), (phi_t1_policy, a_t_policy)
 
+
 class A2CNet(nn.Module):
     def __init__(self, n_stack, num_envs, num_actions, in_size=288, writer=None):
         """
@@ -309,12 +323,10 @@ class A2CNet(nn.Module):
         self.critic = init_(nn.Linear(self.feat_enc_net.h1,
                                       1))  # estimates how good the value function (how good the current state is)
 
-        # init LSTM buffers with the number of the environments
-        self._set_recurrent_buffers(num_envs)
-
-    def _set_recurrent_buffers(self, buf_size):
+    def set_recurrent_buffers(self, buf_size):
         """
-        Initializes LSTM buffers with the proper size
+        Initializes LSTM buffers with the proper size,
+        should be called after instatiation of the network.
 
         :param buf_size: size of the recurrent buffer
         :return:
@@ -351,7 +363,6 @@ class A2CNet(nn.Module):
             self.writer.add_histogram("policy", policy.detach())
             self.writer.add_histogram("value", value.detach())
 
-
         return policy, torch.squeeze(value), feature
 
     def get_action(self, state):
@@ -372,4 +383,5 @@ class A2CNet(nn.Module):
         cat = Categorical(action_prob)
         action = cat.sample()
 
-        return (action, cat.log_prob(action), cat.entropy().mean(), value, feature) # ide is jön egy feature bypass a self(state-ből)
+        return (action, cat.log_prob(action), cat.entropy().mean(), value,
+                feature)  # ide is jön egy feature bypass a self(state-ből)

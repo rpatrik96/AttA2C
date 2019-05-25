@@ -4,6 +4,7 @@ import torch.optim as optim
 
 from model import A2CNet, ICMNet
 
+
 class ICMAgent(nn.Module):
     def __init__(self, n_stack, num_envs, num_actions, in_size=288, feat_size=256, lr=1e-4):
         """
@@ -34,6 +35,9 @@ class ICMAgent(nn.Module):
         if self.is_cuda:
             self.icm.cuda()
             self.a2c.cuda()
+
+        # init LSTM buffers with the number of the environments
+        self.a2c.set_recurrent_buffers(num_envs)
 
         # optimizer
         self.lr = lr

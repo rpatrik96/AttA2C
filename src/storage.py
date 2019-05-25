@@ -2,7 +2,7 @@ from collections import deque
 
 import numpy as np
 import torch
-from torch.cuda.profiler import cudaOutputMode
+
 
 class RolloutStorage(object):
     def __init__(self, rollout_size, num_envs, frame_shape, n_stack, feature_size=288, is_cuda=True, value_coeff=0.5,
@@ -83,7 +83,7 @@ class RolloutStorage(object):
         :return:
         """
         self.states[0].copy_(self.states[-1])
-        self.features = self._generate_buffer((self.rollout_size + 1 , self.num_envs, self.feature_size))
+        self.features = self._generate_buffer((self.rollout_size + 1, self.num_envs, self.feature_size))
         self.actions = self._generate_buffer((self.rollout_size, self.num_envs))
         self.log_probs = self._generate_buffer((self.rollout_size, self.num_envs))
         self.values = self._generate_buffer((self.rollout_size, self.num_envs))
@@ -210,9 +210,9 @@ class RolloutStorage(object):
     def print_reward_stats(self):
         if len(self.episode_rewards) > 1:
             print(
-                    "Mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n".format(
-                            np.mean(self.episode_rewards),
-                            np.median(
-                                    self.episode_rewards),
-                            np.min(self.episode_rewards),
-                            np.max(self.episode_rewards)))
+                "Mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n".format(
+                    np.mean(self.episode_rewards),
+                    np.median(
+                        self.episode_rewards),
+                    np.min(self.episode_rewards),
+                    np.max(self.episode_rewards)))

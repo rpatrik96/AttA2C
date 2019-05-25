@@ -3,37 +3,33 @@ from stable_baselines.common.vec_env import VecFrameStack
 
 from agent import ICMAgent
 from train import Runner
+from utils import get_args, load_and_eval
 
 # constants
-NUM_ENVS = 16
-SEED = 42
-N_STACK = 4
+
 
 if __name__ == '__main__':
+
+    """Argument parsing"""
+    args = get_args()
 
     """Environment"""
     # create the atari environments
     # NOTE: this wrapper automatically resets each env if the episode is done
     env_name = 'PongNoFrameskip-v4'
-    env = make_atari_env(env_name, num_env=NUM_ENVS, seed=SEED)
-    env = VecFrameStack(env, n_stack=N_STACK)
+    env = make_atari_env(env_name, num_env=args.num_envs, seed=args.seed)
+    env = VecFrameStack(env, n_stack=args.n_stack)
 
-    """Training"""
-    agent = ICMAgent(N_STACK, NUM_ENVS, env.action_space.n)
+    """Agent"""
+    agent = ICMAgent(args.n_stack, args.num_envs, env.action_space.n, lr=args.lr)
 
+    if args.train:
+        """Train"""
+        runner = Runner(agent, env, args.num_envs, args.n_stack, args.rollout_size, args.num_updates,
+                        args.max_grad_norm, args.curiosity_coeff, args.icm_beta, args.value_coeff, args.entropy_coeff,
+                        args.tensorboard, args.log_dir, args.cuda, args.seed)
+        runner.train()
 
-    runner = Runner(agent, env, NUM_ENVS, N_STACK, is_cuda=True)
-    runner.train()
-
-#     import torch
-#     a2c.load_state_dict(torch.load("a2c_best_loss"))
-#     a2c.eval()
-#
-#     obs = env.reset()
-#     for i in range(1000) :
-#         tensor = torch.from_numpy(obs.transpose((0, 3, 1, 2))).float() / 255.
-#         tensor =  tensor.cuda() if torch.cuda.is_available() else tensor
-#         action, _,_ = a2c.get_action(tensor)
-#         obs, rewards, dones, info = env.step(action)
-#         env.render()
-# #
+    else:
+        """Eval"""
+        load_and_eval(agent, env)
