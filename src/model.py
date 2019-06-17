@@ -58,6 +58,19 @@ class ConvBlock(nn.Module):
         return x.view(x.shape[0], -1)  # retain batch size
 
 
+class AttentionNet(nn.Module):
+
+    def __init__(self, attention_size):
+        super().__init__()
+
+        self.attention_size = attention_size
+
+        self.attention = nn.Linear(self.attention_size, self.attention_size)
+
+    def forward(self, x):
+        return x* F.softmax(self.attention(x))
+
+
 class FeatureEncoderNet(nn.Module):
     def __init__(self, n_stack, in_size, is_lstm=True):
         """
@@ -217,6 +230,10 @@ class AdversarialHead(nn.Module):
         self.fwd_net = ForwardNet(self.feat_size + self.num_actions)
         self.inv_net = InverseNet(self.num_actions, self.feat_size)
 
+        # attention
+        self.fwd_att = AttentionNet(self.feat_size + self.num_actions)
+        self.inv_att = AttentionNet(self.feat_size)
+
     def forward(self, current_feature, next_feature, action):
         """
 
@@ -236,12 +253,12 @@ class AdversarialHead(nn.Module):
             .scatter_(1, action.long().view(-1, 1), 1)
 
         fwd_in = torch.cat((current_feature, action_one_hot), 1)
-        next_feature_pred = self.fwd_net(fwd_in)
+        next_feature_pred = self.fwd_net(self.fwd_att(fwd_in))
 
         """Inverse dynamics"""
         # predict the action between s_t and s_t1
         inv_in = torch.cat((current_feature, next_feature), 1)
-        action_pred = self.inv_net(inv_in)
+        action_pred = self.inv_net(self.inv_att(inv_in))
 
         return next_feature_pred, action_pred
 

@@ -16,8 +16,7 @@ if __name__ == '__main__':
     """Environment"""
     # create the atari environments
     # NOTE: this wrapper automatically resets each env if the episode is done
-    env_name = 'PongNoFrameskip-v4'
-    env = make_atari_env(env_name, num_env=args.num_envs, seed=args.seed)
+    env = make_atari_env(args.env_name, num_env=args.num_envs, seed=args.seed)
     env = VecFrameStack(env, n_stack=args.n_stack)
 
     """Agent"""
