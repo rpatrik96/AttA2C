@@ -1,6 +1,24 @@
 import argparse
 
 import torch
+import numpy as np
+
+
+class HyperparamScheduler(object):
+
+    def __init__(self, init_val, end_val, tau=20000):
+        super().__init__()
+
+        self.init_val = init_val
+        self.end_val = end_val
+        self.param = self.init_val
+        self.cntr = 0
+        self.tau = tau
+
+    def step(self):
+        self.cntr += 1
+
+        self.param = (self.init_val - self.end_val) * np.exp(-self.cntr / self.tau)
 
 
 def get_args():
@@ -9,7 +27,7 @@ def get_args():
 
     :return: parsed   command line arguments
     """
-    parser = argparse.ArgumentParser(description='Curisoity-driven deep RL with A2C+ICM')
+    parser = argparse.ArgumentParser(description='Curiosity-driven deep RL with A2C+ICM')
 
     # training
     parser.add_argument('--train', action='store_true', default=True,
@@ -18,7 +36,7 @@ def get_args():
                         help='CUDA flag')
     parser.add_argument('--tensorboard', action='store_true', default=True,
                         help='log with Tensorboard')
-    parser.add_argument('--log-dir', type=str, default="../../log/curiosity_loss_pampam",
+    parser.add_argument('--log-dir', type=str, default="../../log/curiosity_loss_scheduled",
                         help='log directory for Tensorboard')
     parser.add_argument('--seed', type=int, default=42, metavar='SEED',
                         help='random seed')
@@ -28,7 +46,9 @@ def get_args():
                         help='learning rate')
 
     # environment
-    parser.add_argument('--num_envs', type=int, default=16, metavar='NUM_ENVS',
+    parser.add_argument('--env-name', type=str, default='PongNoFrameskip-v4',
+                        help='environment name')
+    parser.add_argument('--num-envs', type=int, default=16, metavar='NUM_ENVS',
                         help='number of parallel environemnts')
     parser.add_argument('--n-stack', type=int, default=4, metavar='N_STACK',
                         help='number of frames stacked')
@@ -38,7 +58,7 @@ def get_args():
                         help='number of updates')
 
     # model coefficients
-    parser.add_argument('--curiosity-coeff', type=float, default=.03, metavar='CURIOSITY_COEFF',
+    parser.add_argument('--curiosity-coeff', type=float, default=.015, metavar='CURIOSITY_COEFF',
                         help='curiosity-based exploration coefficient')
     parser.add_argument('--icm-beta', type=float, default=.2, metavar='ICM_BETA',
                         help='beta for the ICM module')

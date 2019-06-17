@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 from storage import RolloutStorage
+from utils import HyperparamScheduler
 
 
 class Runner(object):
@@ -23,7 +24,7 @@ class Runner(object):
         self.seed = seed
 
         self.max_grad_norm = max_grad_norm
-        self.curiosity_coeff = curiosity_coeff
+        self.curiosity_coeff = HyperparamScheduler(curiosity_coeff, 0.0)
         self.icm_beta = icm_beta
 
         # loss scaling coefficients
@@ -83,7 +84,7 @@ class Runner(object):
             """Assemble loss"""
             loss = self.storage.a2c_loss(final_value, entropy) \
                    + self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions) \
-                   - self.curiosity_coeff * curiosity_loss
+                   - self.curiosity_coeff.param * curiosity_loss
 
             loss.backward(retain_graph=False)
 
@@ -103,6 +104,9 @@ class Runner(object):
             # it stores a lot of data which let's the graph
             # grow out of memory, so it is crucial to reset
             self.storage.after_update()
+
+            # update curiosity loss, it should be decreased, otherwise, the feature distribution will not be normal
+            self.curiosity_coeff.step()
 
             if loss < best_loss:
                 best_loss = loss.item()
