@@ -3,7 +3,7 @@ from stable_baselines.common.vec_env import VecFrameStack
 
 from agent import ICMAgent
 from train import Runner
-from utils import get_args, load_and_eval
+from utils import get_args, load_and_eval, NetworkParameters
 
 # constants
 
@@ -24,9 +24,10 @@ if __name__ == '__main__':
 
     if args.train:
         """Train"""
-        runner = Runner(agent, env, args.num_envs, args.n_stack, args.rollout_size, args.num_updates,
-                        args.max_grad_norm, args.curiosity_coeff, args.icm_beta, args.value_coeff, args.entropy_coeff,
-                        args.tensorboard, args.log_dir, args.cuda, args.seed)
+        param = NetworkParameters(args.num_envs, args.n_stack, args.rollout_size, args.num_updates,
+                                  args.max_grad_norm, args.curiosity_coeff, args.icm_beta, args.value_coeff,
+                                  args.entropy_coeff)
+        runner = Runner(agent, env, args.tensorboard, args.log_dir, args.cuda, args.seed)
         runner.train()
 
     else:

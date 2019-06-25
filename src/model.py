@@ -254,11 +254,13 @@ class AdversarialHead(nn.Module):
 
         fwd_in = torch.cat((current_feature, action_one_hot), 1)
         next_feature_pred = self.fwd_net(self.fwd_att(fwd_in))
+        next_feature_pred = self.fwd_net(fwd_in)
 
         """Inverse dynamics"""
         # predict the action between s_t and s_t1
         inv_in = torch.cat((current_feature, next_feature), 1)
-        action_pred = self.inv_net(self.inv_att(inv_in))
+        # action_pred = self.inv_net(self.inv_att(inv_in))
+        action_pred = self.inv_net(inv_in)
 
         return next_feature_pred, action_pred
 
@@ -377,8 +379,8 @@ class A2CNet(nn.Module):
 
         if self.writer is not None:
             self.writer.add_histogram("feature", feature.detach())
-            self.writer.add_histogram("policy", policy.detach())
-            self.writer.add_histogram("value", value.detach())
+            # self.writer.add_histogram("policy", policy.detach())
+            # self.writer.add_histogram("value", value.detach())
 
         return policy, torch.squeeze(value), feature
 

@@ -5,32 +5,24 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 from storage import RolloutStorage
-from utils import HyperparamScheduler
+from utils import HyperparamScheduler, TemporalLogger
 
 
 class Runner(object):
 
-    def __init__(self, net, env, num_envs, n_stack, rollout_size=5, num_updates=2500000,
-                 max_grad_norm=0.5, curiosity_coeff=0.03, icm_beta=0.2, value_coeff=0.5, entropy_coeff=0.02,
-                 tensorboard_log=False, log_path="./log",
-                 is_cuda=True, seed=42):
+    def __init__(self, net, env, params, tensorboard_log=False, log_path="./log", is_cuda=True, seed=42):
         super().__init__()
 
         # constants
-        self.num_envs = num_envs
-        self.rollout_size = rollout_size
-        self.num_updates = num_updates
-        self.n_stack = n_stack
         self.seed = seed
-
-        self.max_grad_norm = max_grad_norm
-        self.curiosity_coeff = HyperparamScheduler(curiosity_coeff, 0.0)
-        self.icm_beta = icm_beta
-
-        # loss scaling coefficients
         self.is_cuda = torch.cuda.is_available() and is_cuda
 
+        # parameters
+        self.params = params
+        self.curiosity_coeff = HyperparamScheduler(params.curiosity_coeff, 0.0)
+
         # objects
+        self.logger = TemporalLogger()
         """Tensorboard logger"""
         self.writer = SummaryWriter(comment="statistics",
                                     log_dir=log_path) if tensorboard_log else None
@@ -39,8 +31,8 @@ class Runner(object):
         self.env = env
 
         self.storage = RolloutStorage(self.rollout_size, self.num_envs, self.env.observation_space.shape[0:-1],
-                                      self.n_stack, is_cuda=self.is_cuda, value_coeff=value_coeff,
-                                      entropy_coeff=entropy_coeff, writer=self.writer)
+                                      self.n_stack, is_cuda=self.is_cuda, value_coeff=params.value_coeff,
+                                      entropy_coeff=params.entropy_coeff, writer=self.writer)
 
         """Network"""
         self.net = net
@@ -82,7 +74,8 @@ class Runner(object):
                 self.writer.add_scalar("curiosity_loss", curiosity_loss.item())
 
             """Assemble loss"""
-            loss = self.storage.a2c_loss(final_value, entropy) \
+            a2c_loss, rewards = self.storage.a2c_loss(final_value, entropy)
+            loss =  a2c_loss \
                    + self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions) \
                    - self.curiosity_coeff.param * curiosity_loss
 
@@ -93,6 +86,9 @@ class Runner(object):
 
             if self.writer is not None:
                 self.writer.add_scalar("loss", loss.item())
+
+            """Log rewards & features"""
+            self.logger.log(rewards, feature.detach().cpu().numpy())
 
             # code for logging gradients
             # params = list(self.net.parameters())
@@ -124,6 +120,8 @@ class Runner(object):
                 self.writer.add_histogram("episode_rewards", torch.tensor(self.storage.episode_rewards))
 
         self.env.close()
+
+        self.logger.save()
 
     def episode_rollout(self):
         episode_entropy = 0
@@ -160,15 +158,17 @@ class Runner(object):
         loss_fwd = F.mse_loss(feature_preds, features)
 
         if self.writer is not None:
-            self.writer.add_histogram("icm_features", features.detach())
-            self.writer.add_histogram("icm_feature_preds", feature_preds.detach())
+            pass
+            # self.writer.add_histogram("icm_features", features.detach())
+            # self.writer.add_histogram("icm_feature_preds", feature_preds.detach())
 
         # inverse loss
         # how good is the action estimate between states
         loss_inv = F.cross_entropy(action_preds.view(-1, self.net.num_actions), actions.long().view(-1))
 
         if self.writer is not None:
-            self.writer.add_scalar("loss_fwd", loss_fwd.item())
-            self.writer.add_scalar("loss_inv", loss_inv.item())
+            pass
+            # self.writer.add_scalar("loss_fwd", loss_fwd.item())
+            # self.writer.add_scalar("loss_inv", loss_inv.item())
 
         return loss_fwd + loss_inv
