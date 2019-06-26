@@ -1,3 +1,4 @@
+from time import gmtime, strftime
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,6 +15,7 @@ class Runner(object):
         super().__init__()
 
         # constants
+        self.timestamp = strftime("%Y-%m-%d %H_%M_%S", gmtime())
         self.seed = seed
         self.is_cuda = torch.cuda.is_available() and is_cuda
 
@@ -22,7 +24,7 @@ class Runner(object):
         self.curiosity_coeff = HyperparamScheduler(params.curiosity_coeff, 0.0)
 
         # objects
-        self.logger = TemporalLogger()
+        self.logger = TemporalLogger(self.params.env_name, self.timestamp)
         """Tensorboard logger"""
         self.writer = SummaryWriter(comment="statistics",
                                     log_dir=log_path) if tensorboard_log else None
@@ -30,9 +32,9 @@ class Runner(object):
         """Environment"""
         self.env = env
 
-        self.storage = RolloutStorage(self.rollout_size, self.num_envs, self.env.observation_space.shape[0:-1],
-                                      self.n_stack, is_cuda=self.is_cuda, value_coeff=params.value_coeff,
-                                      entropy_coeff=params.entropy_coeff, writer=self.writer)
+        self.storage = RolloutStorage(self.params.rollout_size, self.params.num_envs,
+                                      self.env.observation_space.shape[0:-1], self.params.n_stack, is_cuda=self.is_cuda,
+                                      writer=self.writer)
 
         """Network"""
         self.net = net
@@ -50,7 +52,7 @@ class Runner(object):
         self.storage.states[0].copy_(self.storage.obs2tensor(obs))
         best_loss = np.inf
 
-        for num_update in range(self.num_updates):
+        for num_update in range(self.params.num_updates):
 
             final_value, entropy = self.episode_rollout()
 
@@ -61,8 +63,8 @@ class Runner(object):
             # feature, feature_pred: fwd_loss
             # a_t_pred: inv_loss
             feature, feature_pred, a_t_pred = self.net.icm(
-                self.num_envs,
-                self.storage.states.view(-1, self.n_stack, *self.storage.frame_shape),
+                self.params.num_envs,
+                self.storage.states.view(-1, self.params.n_stack, *self.storage.frame_shape),
                 self.storage.actions.view(-1))
 
             """Curiosity loss"""
@@ -74,15 +76,15 @@ class Runner(object):
                 self.writer.add_scalar("curiosity_loss", curiosity_loss.item())
 
             """Assemble loss"""
-            a2c_loss, rewards = self.storage.a2c_loss(final_value, entropy)
-            loss =  a2c_loss \
+            policy_loss, value_loss, rewards = self.storage.a2c_loss(final_value)
+            loss = self.a2c_loss(entropy, policy_loss, value_loss) \
                    + self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions) \
                    - self.curiosity_coeff.param * curiosity_loss
 
             loss.backward(retain_graph=False)
 
             # gradient clipping
-            nn.utils.clip_grad_norm_(self.net.parameters(), self.max_grad_norm)
+            nn.utils.clip_grad_norm_(self.net.parameters(), self.params.max_grad_norm)
 
             if self.writer is not None:
                 self.writer.add_scalar("loss", loss.item())
@@ -123,9 +125,14 @@ class Runner(object):
 
         self.logger.save()
 
+    def a2c_loss(self, entropy, policy_loss, value_loss):
+        return policy_loss \
+               + self.params.value_coeff * value_loss \
+               - self.params.entropy_coeff * entropy
+
     def episode_rollout(self):
         episode_entropy = 0
-        for step in range(self.rollout_size):
+        for step in range(self.params.rollout_size):
             """Interact with the environments """
             # call A2C
             a_t, log_p_a_t, entropy, value, a2c_features = self.net.a2c.get_action(self.storage.get_state(step))

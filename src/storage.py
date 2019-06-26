@@ -5,8 +5,7 @@ import torch
 
 
 class RolloutStorage(object):
-    def __init__(self, rollout_size, num_envs, frame_shape, n_stack, feature_size=288, is_cuda=True, value_coeff=0.5,
-                 entropy_coeff=0.02, writer=None):
+    def __init__(self, rollout_size, num_envs, frame_shape, n_stack, feature_size=288, is_cuda=True, writer=None):
         """
 
         :param rollout_size: number of steps after the policy gets updated
@@ -25,8 +24,7 @@ class RolloutStorage(object):
         self.is_cuda = is_cuda
         self.episode_rewards = deque(maxlen=10)
 
-        self.value_coeff = value_coeff
-        self.entropy_coeff = entropy_coeff
+
         self.writer = writer
 
         # initialize the buffers with zeros
@@ -165,7 +163,9 @@ class RolloutStorage(object):
 
         return r_discounted
 
-    def a2c_loss(self, final_value, entropy):
+    def a2c_loss(self, final_value):
+        # due to the fact that batches can be shorter (e.g. if an env is finished already)
+        # MEAN is used instead of SUM
         # calculate advantage
         # i.e. how good was the estimate of the value of the current state
         rewards = self._discount_rewards(final_value)
@@ -179,11 +179,6 @@ class RolloutStorage(object):
         # and predicted rewards
         value_loss = advantage.pow(2).mean()
 
-        # return the a2c loss
-        # which is the sum of the actor (policy) and critic (advantage) losses
-        # due to the fact that batches can be shorter (e.g. if an env is finished already)
-        # MEAN is used instead of SUM
-        loss = policy_loss + self.value_coeff * value_loss - self.entropy_coeff * entropy
 
         if self.writer is not None:
             # self.writer.add_scalar("a2c_loss", loss.item())
@@ -193,7 +188,7 @@ class RolloutStorage(object):
             self.writer.add_histogram("rewards", rewards.detach())
             self.writer.add_histogram("action_prob", self.log_probs.detach())
 
-        return loss, rewards.detach().cpu().numpy()
+        return policy_loss, value_loss, rewards.detach().cpu().numpy()
 
     def log_episode_rewards(self, infos):
         """

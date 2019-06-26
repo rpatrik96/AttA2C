@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
     if args.train:
         """Train"""
-        param = NetworkParameters(args.num_envs, args.n_stack, args.rollout_size, args.num_updates,
+        param = NetworkParameters(args.env_name, args.num_envs, args.n_stack, args.rollout_size, args.num_updates,
                                   args.max_grad_norm, args.curiosity_coeff, args.icm_beta, args.value_coeff,
                                   args.entropy_coeff)
         runner = Runner(agent, env, args.tensorboard, args.log_dir, args.cuda, args.seed)

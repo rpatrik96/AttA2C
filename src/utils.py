@@ -1,69 +1,15 @@
 import argparse
 from dataclasses import dataclass
+from os import makedirs
+from os.path import isdir
 
-import h5py
 import numpy as np
 import torch
 
 
-class LogData(object):
-    def __init__(self):
-        self.mean = []
-        self.std = []
-        self.min = []
-        self.max = []
-
-    def log(self, sample):
-        self.mean.append(sample.mean())
-        self.std.append(sample.std())
-        self.min.append(sample.min())
-        self.max.append(sample.max())
-
-    def save(self, group):
-        group.create_dataset("mean", data=self.mean)
-        group.create_dataset("std", data=self.std)
-        group.create_dataset("min", data=self.min)
-        group.create_dataset("max", data=self.max)
-
-    def load(self, group):
-        # read in parameters
-        # [()] is needed to read in the whole array if you don't do that,
-        #  it doesn't read the whole data but instead gives you lazy access to sub-parts
-        #  (very useful when the array is huge but you only need a small part of it).
-        # https://stackoverflow.com/questions/10274476/how-to-export-hdf5-file-to-numpy-using-h5py
-        self.mean = group["mean"][()]
-        self.std = group["std"][()]
-        self.min = group["min"][()]
-        self.max = group["max"][()]
-
-
-class TemporalLogger(object):
-    def __init__(self):
-        super().__init__()
-        self.rewards = LogData()
-        self.features = LogData()
-
-    def log(self, reward, feature):
-        self.rewards.log(reward)
-        self.features.log(feature)
-
-    def save(self, path):
-        with h5py.File(path + '.hdf5', 'w') as f:
-            rewards = f.create_group("rewards")
-            features = f.create_group("features")
-
-            self.rewards.save(rewards)
-            self.features.save(features)
-
-    def load(self, path):
-        with h5py.File(path + '.hdf5', 'r') as f:
-            print(f['rewards'])
-            self.rewards.load(f['rewards'])
-            self.features.load(f['features'])
-
-
 @dataclass
 class NetworkParameters:
+    env_name: str
     num_envs: int
     n_stack: int
     rollout_size: int = 5
@@ -140,6 +86,11 @@ def get_args():
 
     # Argument parsing
     return parser.parse_args()
+
+
+def make_dir(dirname):
+    if not isdir(dirname):
+        makedirs(dirname)
 
 
 def load_and_eval(agent, env):
