@@ -29,10 +29,8 @@ class LogData(object):
         :param group: the reference to the group level hierarchy of a .hdf5 file to save the data
         :return:
         """
-        group.create_dataset("mean", data=self.mean)
-        group.create_dataset("std", data=self.std)
-        group.create_dataset("min", data=self.min)
-        group.create_dataset("max", data=self.max)
+        for key, val in self.__dict__.items():
+            group.create_dataset(key, data=val)
 
     def load(self, group):
         """
@@ -60,17 +58,18 @@ class LogData(object):
 
 
 class TemporalLogger(object):
-    def __init__(self, env_name, timestamp):
+    def __init__(self, env_name, timestamp, log_dir=None):
         """
         Creates a TemporalLogger object. If the folder structure is nonexistent, it will also be created
         :param env_name: name of the environment
         :param timestamp: timestamp as a string
+        :param log_dir: logging directory, if it is None, then logging will be at the same hierarchy level as src/
         """
         super().__init__()
         self.timestamp = timestamp
 
         # file structure
-        self.base_dir = join(dirname(dirname(abspath(__file__))), "log")
+        self.base_dir = join(dirname(dirname(abspath(__file__))), "log") if log_dir is None else log_dir
         self.data_dir = join(self.base_dir, env_name)
         make_dir(self.base_dir)
         make_dir(self.data_dir)
@@ -94,12 +93,13 @@ class TemporalLogger(object):
         Saves the temporal statistics into a .hdf5 file
         :return:
         """
-        with h5py.File(join(self.data_dir, "time_log_" + self.timestamp + '.hdf5'), 'w') as f:
+        with h5py.File(join(self.data_dir, 'time_log_' + self.timestamp + '.hdf5'), 'w') as f:
             rewards = f.create_group("rewards")
             features = f.create_group("features")
 
             self.rewards.save(rewards)
             self.features.save(features)
+
 
     def load(self, filename):
         """

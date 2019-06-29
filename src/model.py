@@ -68,7 +68,7 @@ class AttentionNet(nn.Module):
         self.attention = nn.Linear(self.attention_size, self.attention_size)
 
     def forward(self, x):
-        return x* F.softmax(self.attention(x))
+        return x* F.softmax(self.attention(x), dim=-1)
 
 
 class FeatureEncoderNet(nn.Module):
@@ -316,7 +316,7 @@ class ICMNet(nn.Module):
 
 
 class A2CNet(nn.Module):
-    def __init__(self, n_stack, num_envs, num_actions, in_size=288, writer=None):
+    def __init__(self, n_stack, num_envs, num_actions, in_size=288):
         """
         Implementation of the Advantage Actor-Critic (A2C) network
 
@@ -326,8 +326,6 @@ class A2CNet(nn.Module):
         :param in_size: input size of the LSTMCell of the FeatureEncoderNet
         """
         super().__init__()
-
-        self.writer = writer
 
         # constants
         self.in_size = in_size  # in_size
@@ -341,6 +339,8 @@ class A2CNet(nn.Module):
         self.actor = init_(nn.Linear(self.feat_enc_net.h1, self.num_actions))  # estimates what to do
         self.critic = init_(nn.Linear(self.feat_enc_net.h1,
                                       1))  # estimates how good the value function (how good the current state is)
+
+
 
     def set_recurrent_buffers(self, buf_size):
         """
@@ -376,11 +376,6 @@ class A2CNet(nn.Module):
         # calculate policy and value function
         policy = self.actor(feature)
         value = self.critic(feature)
-
-        if self.writer is not None:
-            self.writer.add_histogram("feature", feature.detach())
-            # self.writer.add_histogram("policy", policy.detach())
-            # self.writer.add_histogram("value", value.detach())
 
         return policy, torch.squeeze(value), feature
 

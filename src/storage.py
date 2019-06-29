@@ -5,7 +5,7 @@ import torch
 
 
 class RolloutStorage(object):
-    def __init__(self, rollout_size, num_envs, frame_shape, n_stack, feature_size=288, is_cuda=True, writer=None):
+    def __init__(self, rollout_size, num_envs, frame_shape, n_stack, feature_size=288, is_cuda=True):
         """
 
         :param rollout_size: number of steps after the policy gets updated
@@ -23,9 +23,6 @@ class RolloutStorage(object):
         self.feature_size = feature_size
         self.is_cuda = is_cuda
         self.episode_rewards = deque(maxlen=10)
-
-
-        self.writer = writer
 
         # initialize the buffers with zeros
         self.reset_buffers()
@@ -178,15 +175,6 @@ class RolloutStorage(object):
         # the value loss weights the squared difference between the actual
         # and predicted rewards
         value_loss = advantage.pow(2).mean()
-
-
-        if self.writer is not None:
-            # self.writer.add_scalar("a2c_loss", loss.item())
-            # self.writer.add_scalar("policy_loss", policy_loss.item())
-            # self.writer.add_scalar("value_loss", value_loss.item())
-            # self.writer.add_histogram("advantage", advantage.detach())
-            self.writer.add_histogram("rewards", rewards.detach())
-            self.writer.add_histogram("action_prob", self.log_probs.detach())
 
         return policy_loss, value_loss, rewards.detach().cpu().numpy()
 

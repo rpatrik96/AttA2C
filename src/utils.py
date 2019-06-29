@@ -1,10 +1,41 @@
 import argparse
 from dataclasses import dataclass
 from os import makedirs
-from os.path import isdir
+from os.path import isdir, isfile, join
 
 import numpy as np
+import pandas as pd
 import torch
+
+
+class HyperparamScheduler(object):
+
+    def __init__(self, init_val, end_val=0.0, tau=20000, threshold=1e-5):
+        super().__init__()
+
+        self.init_val = init_val
+        self.end_val = end_val
+        self.value = self.init_val
+        self.cntr = 0
+        self.tau = tau
+        self.threshold = threshold
+
+    def step(self):
+        self.cntr += 1
+
+        if self.value > self.threshold:
+            self.value = self.end_val + (self.init_val - self.end_val) * np.exp(-self.cntr / self.tau)
+        else:
+            self.value = 0.0
+
+    def save(self, group):
+        """
+
+        :param group: the reference to the group level hierarchy of a .hdf5 file to save the data
+        :return:
+        """
+        for key, val in self.__dict__.items():
+            group.create_dataset(key, data=val)
 
 
 @dataclass
@@ -15,27 +46,23 @@ class NetworkParameters:
     rollout_size: int = 5
     num_updates: int = 2500000
     max_grad_norm: float = 0.5
-    curiosity_coeff: float = 0.03
+    curiosity_coeff: HyperparamScheduler = HyperparamScheduler(0.0, 0.0)
     icm_beta: float = 0.2
     value_coeff: float = 0.5
     entropy_coeff: float = 0.02
 
+    def save(self, data_dir, timestamp):
+        param_dict = {**self.__dict__, **self.curiosity_coeff.__dict__}
+        del param_dict["curiosity_coeff"]
 
-class HyperparamScheduler(object):
+        df_path = join(data_dir, "params_" + timestamp + '.tsv')
 
-    def __init__(self, init_val, end_val, tau=20000):
-        super().__init__()
-
-        self.init_val = init_val
-        self.end_val = end_val
-        self.param = self.init_val
-        self.cntr = 0
-        self.tau = tau
-
-    def step(self):
-        self.cntr += 1
-
-        self.param = (self.init_val - self.end_val) * np.exp(-self.cntr / self.tau)
+        pd.DataFrame.from_records([param_dict]).to_csv(
+            df_path,
+            sep='\t',
+            index=False,
+            header=True if not isfile(df_path) else False,
+            mode='a')
 
 
 def get_args():
@@ -51,9 +78,7 @@ def get_args():
                         help='train flag (False->load model)')
     parser.add_argument('--cuda', action='store_true', default=True,
                         help='CUDA flag')
-    parser.add_argument('--tensorboard', action='store_true', default=True,
-                        help='log with Tensorboard')
-    parser.add_argument('--log-dir', type=str, default="../../log/curiosity_loss_scheduled",
+    parser.add_argument('--log-dir', type=str, default="/data/patrik/log",
                         help='log directory for Tensorboard')
     parser.add_argument('--seed', type=int, default=42, metavar='SEED',
                         help='random seed')
@@ -71,7 +96,7 @@ def get_args():
                         help='number of frames stacked')
     parser.add_argument('--rollout-size', type=int, default=5, metavar='ROLLOUT_SIZE',
                         help='rollout size')
-    parser.add_argument('--num-updates', type=int, default=2500000, metavar='NUM_UPDATES',
+    parser.add_argument('--num-updates', type=int, default=1700000, metavar='NUM_UPDATES',
                         help='number of updates')
 
     # model coefficients
