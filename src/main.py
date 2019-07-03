@@ -18,7 +18,7 @@ if __name__ == '__main__':
                  "SeaquestNoFrameskip-v0", "SeaquestNoFrameskip-v4"]
 
 
-    taus = [0.000001, 10000, 50000, 200000]
+    taus = [0.000001, 50000, 200000]
 
     for env_name in env_names:
         for tau in taus:

@@ -77,7 +77,8 @@ class Runner(object):
             nn.utils.clip_grad_norm_(self.net.parameters(), self.params.max_grad_norm)
 
             """Log rewards & features"""
-            self.logger.log(rewards, feature.detach().cpu().numpy())
+            if len(self.storage.episode_rewards) > 1:
+                self.logger.log(np.array(self.storage.episode_rewards), feature.detach().cpu().numpy())
 
             self.net.optimizer.step()
 
