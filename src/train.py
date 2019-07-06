@@ -1,5 +1,5 @@
-from time import gmtime, strftime
 from os.path import abspath
+from time import gmtime, strftime
 
 import numpy as np
 import torch
@@ -24,7 +24,7 @@ class Runner(object):
         self.params = params
 
         """Logger"""
-        self.logger = TemporalLogger(self.params.env_name, self.timestamp, log_dir)
+        self.logger = TemporalLogger(self.params.env_name, self.timestamp, log_dir, *["rewards", "features"])
 
         """Environment"""
         self.env = env
@@ -78,7 +78,8 @@ class Runner(object):
 
             """Log rewards & features"""
             if len(self.storage.episode_rewards) > 1:
-                self.logger.log(np.array(self.storage.episode_rewards), feature.detach().cpu().numpy())
+                self.logger.log(
+                    **{"rewards": np.array(self.storage.episode_rewards), "features": feature.detach().cpu().numpy()})
 
             self.net.optimizer.step()
 
@@ -101,9 +102,8 @@ class Runner(object):
 
         self.env.close()
 
-        self.logger.save()
-        self.params.save(self.logger.data_dir, self.timestamp
-                         )
+        self.logger.save(*["rewards", "features"])
+        self.params.save(self.logger.data_dir, self.timestamp)
 
     def a2c_loss(self, entropy, policy_loss, value_loss):
         return policy_loss \

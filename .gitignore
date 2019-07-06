@@ -2,6 +2,9 @@
 .idea/
 .vscode/
 
+/src/__pycache__/
+/jupyter/.ipynb_checkpoints/
+
 *.hdf5
 *.npy
 *.pickle

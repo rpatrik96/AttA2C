@@ -68,7 +68,7 @@ class AttentionNet(nn.Module):
         self.attention = nn.Linear(self.attention_size, self.attention_size)
 
     def forward(self, x):
-        return x* F.softmax(self.attention(x), dim=-1)
+        return x * F.softmax(self.attention(x), dim=-1)
 
 
 class FeatureEncoderNet(nn.Module):
@@ -232,7 +232,7 @@ class AdversarialHead(nn.Module):
 
         # attention
         self.fwd_att = AttentionNet(self.feat_size + self.num_actions)
-        self.inv_att = AttentionNet(self.feat_size)
+        self.inv_att = AttentionNet(2 * self.feat_size)
 
     def forward(self, current_feature, next_feature, action):
         """
@@ -254,13 +254,13 @@ class AdversarialHead(nn.Module):
 
         fwd_in = torch.cat((current_feature, action_one_hot), 1)
         next_feature_pred = self.fwd_net(self.fwd_att(fwd_in))
-        next_feature_pred = self.fwd_net(fwd_in)
+        # next_feature_pred = self.fwd_net(fwd_in)
 
         """Inverse dynamics"""
         # predict the action between s_t and s_t1
         inv_in = torch.cat((current_feature, next_feature), 1)
-        # action_pred = self.inv_net(self.inv_att(inv_in))
-        action_pred = self.inv_net(inv_in)
+        action_pred = self.inv_net(self.inv_att(inv_in))
+        # action_pred = self.inv_net(inv_in)
 
         return next_feature_pred, action_pred
 
@@ -285,7 +285,7 @@ class ICMNet(nn.Module):
         # networks
         self.feat_enc_net = FeatureEncoderNet(n_stack, self.in_size, is_lstm=False)
         self.pred_net = AdversarialHead(self.in_size, self.num_actions)  # goal: minimize prediction error
-        self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
+        # self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
         # (i.e. predict states which can contain new information)
 
     def forward(self, num_envs, states, action):
@@ -310,7 +310,7 @@ class ICMNet(nn.Module):
 
         """ HERE COMES THE NEW THING (currently commented out)"""
         next_feature_pred, action_pred = self.pred_net(feature, next_feature, action)
-        # phi_t1_policy, a_t_policy = self.policy_net_net(feature, next_feature, a_t)
+        # phi_t1_policy, a_t_policy = self.policy_net(feature, next_feature, a_t)
 
         return next_feature, next_feature_pred, action_pred  # (next_feature_pred, action_pred), (phi_t1_policy, a_t_policy)
 
@@ -339,8 +339,6 @@ class A2CNet(nn.Module):
         self.actor = init_(nn.Linear(self.feat_enc_net.h1, self.num_actions))  # estimates what to do
         self.critic = init_(nn.Linear(self.feat_enc_net.h1,
                                       1))  # estimates how good the value function (how good the current state is)
-
-
 
     def set_recurrent_buffers(self, buf_size):
         """

@@ -13,12 +13,14 @@ if __name__ == '__main__':
     """Argument parsing"""
     args = get_args()
 
-    env_names = ["PongNoFrameskip-v0", "PongNoFrameskip-v4",
-                 "BreakoutNoFrameskip-v0", "BreakoutNoFrameskip-v4",
-                 "SeaquestNoFrameskip-v0", "SeaquestNoFrameskip-v4"]
+    print("-------------ATTENTION IS ACTIVE-------------")
+
+    env_names = ["PongNoFrameskip-v0", "PongNoFrameskip-v4"]
+                 # "BreakoutNoFrameskip-v0", "BreakoutNoFrameskip-v4",
+                 # "SeaquestNoFrameskip-v0", "SeaquestNoFrameskip-v4"]
 
 
-    taus = [0.000001, 50000, 200000]
+    taus = [0.000001]#, 20000, 100000]
 
     for env_name in env_names:
         for tau in taus:

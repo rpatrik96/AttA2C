@@ -78,7 +78,7 @@ def get_args():
                         help='train flag (False->load model)')
     parser.add_argument('--cuda', action='store_true', default=True,
                         help='CUDA flag')
-    parser.add_argument('--log-dir', type=str, default="/data/patrik/log",
+    parser.add_argument('--log-dir', type=str, default="/data/patrik/log_att",
                         help='log directory for Tensorboard')
     parser.add_argument('--seed', type=int, default=42, metavar='SEED',
                         help='random seed')
@@ -96,7 +96,7 @@ def get_args():
                         help='number of frames stacked')
     parser.add_argument('--rollout-size', type=int, default=5, metavar='ROLLOUT_SIZE',
                         help='rollout size')
-    parser.add_argument('--num-updates', type=int, default=1000000, metavar='NUM_UPDATES',
+    parser.add_argument('--num-updates', type=int, default=600000, metavar='NUM_UPDATES',
                         help='number of updates')
 
     # model coefficients
