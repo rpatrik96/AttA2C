@@ -66,9 +66,9 @@ class Runner(object):
                               .view(-1, self.storage.feature_size) - feature_pred.detach()).pow(2).mean()
 
             """Assemble loss"""
-            policy_loss, value_loss, rewards = self.storage.a2c_loss(final_value)
-            loss = self.a2c_loss(entropy, policy_loss, value_loss) \
-                   + self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions) \
+            # policy_loss, value_loss, rewards = self.storage.a2c_loss(final_value)
+            # self.a2c_loss(entropy, policy_loss, value_loss)
+            loss = self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions) \
                    - self.params.curiosity_coeff.value * curiosity_loss
 
             loss.backward(retain_graph=False)
@@ -79,7 +79,8 @@ class Runner(object):
             """Log rewards & features"""
             if len(self.storage.episode_rewards) > 1:
                 self.logger.log(
-                    **{"rewards": np.array(self.storage.episode_rewards), "features": feature.detach().cpu().numpy()})
+                    **{"rewards": np.array(self.storage.episode_rewards),
+                       "features": self.storage.features[-1].detach().cpu().numpy()})
 
             self.net.optimizer.step()
 

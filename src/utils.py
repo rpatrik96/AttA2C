@@ -1,11 +1,28 @@
 import argparse
 from dataclasses import dataclass
+from enum import Enum
 from os import makedirs
 from os.path import isdir, isfile, join
 
 import numpy as np
 import pandas as pd
 import torch
+
+
+class AttentionType(Enum):
+    SINGLE_ATTENTION = 0
+    DOUBLE_ATTENTION = 1
+
+
+class AttentionTarget(Enum):
+    NONE = 0
+    ICM = 1
+    A2C = 2
+
+
+class RewardType(Enum):
+    INTRINSIC_AND_EXTRINSIC = 0  # currently not used
+    INTRINSIC_ONLY = 1
 
 
 class HyperparamScheduler(object):
@@ -50,12 +67,15 @@ class NetworkParameters:
     icm_beta: float = 0.2
     value_coeff: float = 0.5
     entropy_coeff: float = 0.02
+    attention_target: AttentionTarget = AttentionTarget.NONE
+    attention_type: AttentionType = AttentionType.SINGLE_ATTENTION
+    reward_type: RewardType = RewardType.INTRINSIC_ONLY
 
     def save(self, data_dir, timestamp):
-        param_dict = {**self.__dict__, **self.curiosity_coeff.__dict__}
+        param_dict = {**self.__dict__, **self.curiosity_coeff.__dict__, "timestamp": timestamp}
         del param_dict["curiosity_coeff"]
 
-        df_path = join(data_dir, "params_" + timestamp + '.tsv')
+        df_path = join(data_dir, "params.tsv")
 
         pd.DataFrame.from_records([param_dict]).to_csv(
             df_path,
@@ -78,7 +98,7 @@ def get_args():
                         help='train flag (False->load model)')
     parser.add_argument('--cuda', action='store_true', default=True,
                         help='CUDA flag')
-    parser.add_argument('--log-dir', type=str, default="/data/patrik/log_att",
+    parser.add_argument('--log-dir', type=str, default="../log",
                         help='log directory for Tensorboard')
     parser.add_argument('--seed', type=int, default=42, metavar='SEED',
                         help='random seed')
@@ -96,11 +116,11 @@ def get_args():
                         help='number of frames stacked')
     parser.add_argument('--rollout-size', type=int, default=5, metavar='ROLLOUT_SIZE',
                         help='rollout size')
-    parser.add_argument('--num-updates', type=int, default=600000, metavar='NUM_UPDATES',
+    parser.add_argument('--num-updates', type=int, default=2500000, metavar='NUM_UPDATES',
                         help='number of updates')
 
     # model coefficients
-    parser.add_argument('--curiosity-coeff', type=float, default=.015, metavar='CURIOSITY_COEFF',
+    parser.add_argument('--curiosity-coeff', type=float, default=.02, metavar='CURIOSITY_COEFF',
                         help='curiosity-based exploration coefficient')
     parser.add_argument('--icm-beta', type=float, default=.2, metavar='ICM_BETA',
                         help='beta for the ICM module')
