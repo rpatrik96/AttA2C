@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
 
+from utils import AttentionType
+
 
 def init(module, weight_init, bias_init, gain=1):
     """
@@ -68,7 +70,7 @@ class AttentionNet(nn.Module):
         self.attention = nn.Linear(self.attention_size, self.attention_size)
 
     def forward(self, x):
-        return x* F.softmax(self.attention(x))
+        return x * F.softmax(self.attention(x), dim=-1)
 
 
 class FeatureEncoderNet(nn.Module):
@@ -213,10 +215,12 @@ class ForwardNet(nn.Module):
 
 
 class AdversarialHead(nn.Module):
-    def __init__(self, feat_size, num_actions):
+    def __init__(self, feat_size, num_actions, attention, attention_type):
         """
         Network for exploiting the forward and inverse dynamics
 
+        :param attention:
+        :param attention_type:
         :param feat_size: size of the feature space
         :param num_actions: size of the action space, pass env.action_space.n
         """
@@ -231,8 +235,18 @@ class AdversarialHead(nn.Module):
         self.inv_net = InverseNet(self.num_actions, self.feat_size)
 
         # attention
-        self.fwd_att = AttentionNet(self.feat_size + self.num_actions)
-        self.inv_att = AttentionNet(self.feat_size)
+        self.attention_type = attention_type
+        self.attention = attention
+
+        if self.attention:
+            if self.attention_type == AttentionType.SINGLE_ATTENTION:
+                self.fwd_att = AttentionNet(self.feat_size + self.num_actions)
+                self.inv_att = AttentionNet(2 * self.feat_size)
+            elif self.attention_type == AttentionType.DOUBLE_ATTENTION:
+                self.fwd_feat_att = AttentionNet(self.feat_size)
+                self.fwd_action_att = AttentionNet(self.num_actions)
+                self.inv_cur_feat_att = AttentionNet(self.feat_size)
+                self.inv_next_feat_att = AttentionNet(self.feat_size)
 
     def forward(self, current_feature, next_feature, action):
         """
@@ -252,26 +266,40 @@ class AdversarialHead(nn.Module):
         action_one_hot = torch.zeros(action.shape[0], self.num_actions, device=self.fwd_net.fc1.weight.device) \
             .scatter_(1, action.long().view(-1, 1), 1)
 
-        fwd_in = torch.cat((current_feature, action_one_hot), 1)
-        next_feature_pred = self.fwd_net(self.fwd_att(fwd_in))
+        if self.attention:
+            if self.attention_type == AttentionType.SINGLE_ATTENTION:
+                fwd_in = self.fwd_att(torch.cat((current_feature, action_one_hot), 1))
+            elif self.attention_type == AttentionType.DOUBLE_ATTENTION:
+                fwd_in = torch.cat((self.fwd_feat_att(current_feature), self.fwd_action_att(action_one_hot)), 1)
+        else:
+            fwd_in = torch.cat((current_feature, action_one_hot), 1)
+
         next_feature_pred = self.fwd_net(fwd_in)
 
         """Inverse dynamics"""
         # predict the action between s_t and s_t1
-        inv_in = torch.cat((current_feature, next_feature), 1)
-        # action_pred = self.inv_net(self.inv_att(inv_in))
+        if self.attention:
+            if self.attention_type == AttentionType.SINGLE_ATTENTION:
+                inv_in = self.inv_att(torch.cat((current_feature, next_feature), 1))
+            elif self.attention_type == AttentionType.DOUBLE_ATTENTION:
+                inv_in = torch.cat((self.inv_cur_feat_att(current_feature), self.inv_next_feat_att(next_feature)), 1)
+        else:
+            inv_in = torch.cat((current_feature, next_feature), 1)
+
         action_pred = self.inv_net(inv_in)
 
         return next_feature_pred, action_pred
 
 
 class ICMNet(nn.Module):
-    def __init__(self, n_stack, num_actions, in_size=288, feat_size=256):
+    def __init__(self, n_stack, num_actions, attention, attn_type, in_size=288, feat_size=256):
         """
         Network implementing the Intrinsic Curiosity Module (ICM) of https://arxiv.org/abs/1705.05363
 
         :param n_stack: number of frames stacked
         :param num_actions: dimensionality of the action space, pass env.action_space.n
+        :param attention:
+        :param attn_type:
         :param in_size: input size of the AdversarialHeads
         :param feat_size: size of the feature space
         """
@@ -284,8 +312,9 @@ class ICMNet(nn.Module):
 
         # networks
         self.feat_enc_net = FeatureEncoderNet(n_stack, self.in_size, is_lstm=False)
-        self.pred_net = AdversarialHead(self.in_size, self.num_actions)  # goal: minimize prediction error
-        self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
+        self.pred_net = AdversarialHead(self.in_size, self.num_actions, attention,
+                                        attn_type)  # goal: minimize prediction error
+        # self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
         # (i.e. predict states which can contain new information)
 
     def forward(self, num_envs, states, action):
@@ -310,28 +339,29 @@ class ICMNet(nn.Module):
 
         """ HERE COMES THE NEW THING (currently commented out)"""
         next_feature_pred, action_pred = self.pred_net(feature, next_feature, action)
-        # phi_t1_policy, a_t_policy = self.policy_net_net(feature, next_feature, a_t)
+        # phi_t1_policy, a_t_policy = self.policy_net(feature, next_feature, a_t)
 
         return next_feature, next_feature_pred, action_pred  # (next_feature_pred, action_pred), (phi_t1_policy, a_t_policy)
 
 
 class A2CNet(nn.Module):
-    def __init__(self, n_stack, num_envs, num_actions, in_size=288, writer=None):
+    def __init__(self, n_stack, num_actions, attention, in_size=288):
         """
         Implementation of the Advantage Actor-Critic (A2C) network
 
-        :param num_envs:
         :param n_stack: number of frames stacked
         :param num_actions: size of the action space, pass env.action_space.n
+        :param attention:
         :param in_size: input size of the LSTMCell of the FeatureEncoderNet
         """
         super().__init__()
 
-        self.writer = writer
-
         # constants
         self.in_size = in_size  # in_size
         self.num_actions = num_actions
+
+        # attention
+        self.attention = attention
 
         # networks
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
@@ -341,6 +371,10 @@ class A2CNet(nn.Module):
         self.actor = init_(nn.Linear(self.feat_enc_net.h1, self.num_actions))  # estimates what to do
         self.critic = init_(nn.Linear(self.feat_enc_net.h1,
                                       1))  # estimates how good the value function (how good the current state is)
+
+        if self.attention:
+            self.actor_att = AttentionNet(self.feat_enc_net.h1)
+            self.critic_att = AttentionNet(self.feat_enc_net.h1)
 
     def set_recurrent_buffers(self, buf_size):
         """
@@ -374,13 +408,12 @@ class A2CNet(nn.Module):
         feature = self.feat_enc_net(state)
 
         # calculate policy and value function
-        policy = self.actor(feature)
-        value = self.critic(feature)
-
-        if self.writer is not None:
-            self.writer.add_histogram("feature", feature.detach())
-            # self.writer.add_histogram("policy", policy.detach())
-            # self.writer.add_histogram("value", value.detach())
+        if self.attention:
+            policy = self.actor(self.actor_att(feature))
+            value = self.critic(self.critic_att(feature))
+        else:
+            policy = self.actor(feature)
+            value = self.critic(feature)
 
         return policy, torch.squeeze(value), feature
 

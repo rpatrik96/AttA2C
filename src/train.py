@@ -1,17 +1,18 @@
+from os.path import abspath
 from time import gmtime, strftime
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.tensorboard import SummaryWriter
 
+from logger import TemporalLogger
 from storage import RolloutStorage
-from utils import HyperparamScheduler, TemporalLogger
 
 
 class Runner(object):
 
-    def __init__(self, net, env, params, tensorboard_log=False, log_path="./log", is_cuda=True, seed=42):
+    def __init__(self, net, env, params, is_cuda=True, seed=42, log_dir=abspath("/data/patrik")):
         super().__init__()
 
         # constants
@@ -21,29 +22,21 @@ class Runner(object):
 
         # parameters
         self.params = params
-        self.curiosity_coeff = HyperparamScheduler(params.curiosity_coeff, 0.0)
 
-        # objects
-        self.logger = TemporalLogger(self.params.env_name, self.timestamp)
-        """Tensorboard logger"""
-        self.writer = SummaryWriter(comment="statistics",
-                                    log_dir=log_path) if tensorboard_log else None
+        """Logger"""
+        self.logger = TemporalLogger(self.params.env_name, self.timestamp, log_dir, *["rewards", "features"])
 
         """Environment"""
         self.env = env
 
         self.storage = RolloutStorage(self.params.rollout_size, self.params.num_envs,
-                                      self.env.observation_space.shape[0:-1], self.params.n_stack, is_cuda=self.is_cuda,
-                                      writer=self.writer)
+                                      self.env.observation_space.shape[0:-1], self.params.n_stack, is_cuda=self.is_cuda)
 
         """Network"""
         self.net = net
-        self.net.a2c.writer = self.writer
 
         if self.is_cuda:
             self.net = self.net.cuda()
-
-        # self.writer.add_graph(self.net, input_to_model=(self.storage.states[0],)) --> not working for LSTMCEll
 
     def train(self):
 
@@ -72,30 +65,22 @@ class Runner(object):
             curiosity_loss = (self.storage.features[1:, :, :]
                               .view(-1, self.storage.feature_size) - feature_pred.detach()).pow(2).mean()
 
-            if self.writer is not None:
-                self.writer.add_scalar("curiosity_loss", curiosity_loss.item())
-
             """Assemble loss"""
-            policy_loss, value_loss, rewards = self.storage.a2c_loss(final_value)
-            loss = self.a2c_loss(entropy, policy_loss, value_loss) \
-                   + self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions) \
-                   - self.curiosity_coeff.param * curiosity_loss
+            # policy_loss, value_loss, rewards = self.storage.a2c_loss(final_value)
+            # self.a2c_loss(entropy, policy_loss, value_loss)
+            loss = self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions) \
+                   - self.params.curiosity_coeff.value * curiosity_loss
 
             loss.backward(retain_graph=False)
 
             # gradient clipping
             nn.utils.clip_grad_norm_(self.net.parameters(), self.params.max_grad_norm)
 
-            if self.writer is not None:
-                self.writer.add_scalar("loss", loss.item())
-
             """Log rewards & features"""
-            self.logger.log(rewards, feature.detach().cpu().numpy())
-
-            # code for logging gradients
-            # params = list(self.net.parameters())
-            # for i, param in enumerate(params):
-            #     self.writer.add_histogram("param_" + str(i) + "_" + str(list(param.grad.shape)), param.grad.detach())
+            if len(self.storage.episode_rewards) > 1:
+                self.logger.log(
+                    **{"rewards": np.array(self.storage.episode_rewards),
+                       "features": self.storage.features[-1].detach().cpu().numpy()})
 
             self.net.optimizer.step()
 
@@ -104,26 +89,22 @@ class Runner(object):
             self.storage.after_update()
 
             # update curiosity loss, it should be decreased, otherwise, the feature distribution will not be normal
-            self.curiosity_coeff.step()
+            self.params.curiosity_coeff.step()
 
-            if loss < best_loss:
-                best_loss = loss.item()
-                print("model saved with best loss: ", best_loss, " at update #", num_update)
-                torch.save(self.net.state_dict(), "a2c_best_loss_no_norm")
+            # if loss < best_loss:
+            #     best_loss = loss.item()
+            #     print("model saved with best loss: ", best_loss, " at update #", num_update)
+            #     torch.save(self.net.state_dict(), "a2c_best_loss_no_norm")
 
-            elif num_update % 10 == 0:
+            if num_update % 100 == 0:
                 print("current loss: ", loss.item(), " at update #", num_update)
                 self.storage.print_reward_stats()
-
-            elif num_update % 100 == 0:
-                torch.save(self.net.state_dict(), "a2c_time_log_no_norm")
-
-            if self.writer is not None and len(self.storage.episode_rewards) > 1:
-                self.writer.add_histogram("episode_rewards", torch.tensor(self.storage.episode_rewards))
+                # torch.save(self.net.state_dict(), "a2c_time_log_no_norm")
 
         self.env.close()
 
-        self.logger.save()
+        self.logger.save(*["rewards", "features"])
+        self.params.save(self.logger.data_dir, self.timestamp)
 
     def a2c_loss(self, entropy, policy_loss, value_loss):
         return policy_loss \
@@ -156,6 +137,7 @@ class Runner(object):
             _, _, _, final_value, final_features = self.net.a2c.get_action(self.storage.get_state(step + 1))
 
         self.storage.features[step + 1].copy_(final_features)
+
         return final_value, episode_entropy
 
     def icm_loss(self, features, feature_preds, action_preds, actions):
@@ -164,18 +146,8 @@ class Runner(object):
         # measure of how good features can be predicted
         loss_fwd = F.mse_loss(feature_preds, features)
 
-        if self.writer is not None:
-            pass
-            # self.writer.add_histogram("icm_features", features.detach())
-            # self.writer.add_histogram("icm_feature_preds", feature_preds.detach())
-
         # inverse loss
         # how good is the action estimate between states
         loss_inv = F.cross_entropy(action_preds.view(-1, self.net.num_actions), actions.long().view(-1))
-
-        if self.writer is not None:
-            pass
-            # self.writer.add_scalar("loss_fwd", loss_fwd.item())
-            # self.writer.add_scalar("loss_inv", loss_inv.item())
 
         return loss_fwd + loss_inv
