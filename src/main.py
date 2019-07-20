@@ -41,7 +41,7 @@ if __name__ == '__main__':
                                                   args.num_updates, args.max_grad_norm,
                                                   HyperparamScheduler(args.curiosity_coeff, tau=tau), args.icm_beta,
                                                   args.value_coeff, args.entropy_coeff, attn_target, attn_type,
-                                                  RewardType.INTRINSIC_ONLY)
+                                                  RewardType.INTRINSIC_AND_EXTRINSIC)
                         runner = Runner(agent, env, param, args.cuda, args.seed, args.log_dir)
                         runner.train()
 

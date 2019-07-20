@@ -21,8 +21,8 @@ class AttentionTarget(Enum):
 
 
 class RewardType(Enum):
-    INTRINSIC_AND_EXTRINSIC = 0  # currently not used
-    INTRINSIC_ONLY = 1
+    INTRINSIC_AND_EXTRINSIC = 0
+    INTRINSIC_ONLY = 1  # currently not used
 
 
 class HyperparamScheduler(object):
