@@ -66,9 +66,10 @@ class Runner(object):
                               .view(-1, self.storage.feature_size) - feature_pred.detach()).pow(2).mean()
 
             """Assemble loss"""
-            # policy_loss, value_loss, rewards = self.storage.a2c_loss(final_value)
-            # self.a2c_loss(entropy, policy_loss, value_loss)
-            loss = self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions) \
+            policy_loss, value_loss, rewards = self.storage.a2c_loss(final_value)
+
+            loss = self.a2c_loss(entropy, policy_loss, value_loss) \
+                   + self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions) \
                    - self.params.curiosity_coeff.value * curiosity_loss
 
             loss.backward(retain_graph=False)
