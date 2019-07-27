@@ -1,5 +1,4 @@
 import argparse
-from dataclasses import dataclass
 from enum import Enum
 from os import makedirs
 from os.path import isdir, isfile, join
@@ -55,21 +54,26 @@ class HyperparamScheduler(object):
             group.create_dataset(key, data=val)
 
 
-@dataclass
-class NetworkParameters:
-    env_name: str
-    num_envs: int
-    n_stack: int
-    rollout_size: int = 5
-    num_updates: int = 2500000
-    max_grad_norm: float = 0.5
-    curiosity_coeff: HyperparamScheduler = HyperparamScheduler(0.0, 0.0)
-    icm_beta: float = 0.2
-    value_coeff: float = 0.5
-    entropy_coeff: float = 0.02
-    attention_target: AttentionTarget = AttentionTarget.NONE
-    attention_type: AttentionType = AttentionType.SINGLE_ATTENTION
-    reward_type: RewardType = RewardType.INTRINSIC_ONLY
+class NetworkParameters(object):
+    def __init__(self, env_name: str, num_envs: int, n_stack: int, rollout_size: int = 5, num_updates: int = 2500000,
+                 max_grad_norm: float = 0.5, curiosity_coeff: HyperparamScheduler = HyperparamScheduler(0.0, 0.0),
+                 icm_beta: float = 0.2, value_coeff: float = 0.5, entropy_coeff: float = 0.02,
+                 attention_target: AttentionTarget = AttentionTarget.NONE,
+                 attention_type: AttentionType = AttentionType.SINGLE_ATTENTION,
+                 reward_type: RewardType = RewardType.INTRINSIC_ONLY):
+        self.env_name = env_name
+        self.num_envs = num_envs
+        self.n_stack = n_stack
+        self.rollout_size = rollout_size
+        self.num_updates = num_updates
+        self.max_grad_norm = max_grad_norm
+        self.curiosity_coeff = curiosity_coeff
+        self.icm_beta = icm_beta
+        self.value_coeff = value_coeff
+        self.entropy_coeff = entropy_coeff
+        self.attention_target = attention_target
+        self.attention_type = attention_type
+        self.reward_type = reward_type
 
     def save(self, data_dir, timestamp):
         param_dict = {**self.__dict__, **self.curiosity_coeff.__dict__, "timestamp": timestamp}
@@ -108,10 +112,12 @@ def get_args():
                         help='learning rate')
 
     # environment
+    parser.add_argument('--idx', type=int, default=4, metavar='IDX',
+                        help='index of the configuration to start from')
     parser.add_argument('--env-name', type=str, default='PongNoFrameskip-v4',
                         help='environment name')
     parser.add_argument('--num-envs', type=int, default=4, metavar='NUM_ENVS',
-                        help='number of parallel environemnts')
+                        help='number of parallel environments')
     parser.add_argument('--n-stack', type=int, default=4, metavar='N_STACK',
                         help='number of frames stacked')
     parser.add_argument('--rollout-size', type=int, default=5, metavar='ROLLOUT_SIZE',

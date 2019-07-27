@@ -20,11 +20,19 @@ if __name__ == '__main__':
 
     taus = [0.000001, 50000, 300000]
 
+    cur_idx = 0
+
     for env_name in env_names:
         for tau in taus:
             for attn_target in AttentionTarget:
                 for attn_type in AttentionType:
                     print(env_name, args.curiosity_coeff, attn_target, attn_type, tau)
+                    # manage start index
+                    cur_idx += 1
+                    if cur_idx < args.idx:
+                        # skip if index not achieved
+                        break
+                        
                     """Environment"""
                     # create the atari environments
                     # NOTE: this wrapper automatically resets each env if the episode is done
@@ -48,7 +56,6 @@ if __name__ == '__main__':
                     else:
                         """Eval"""
                         load_and_eval(agent, env)
-
 
                     if attn_target == AttentionTarget.NONE:
                         break
