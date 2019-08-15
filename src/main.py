@@ -21,6 +21,7 @@ if __name__ == '__main__':
     taus = [0.000001, 50000, 300000]
 
     cur_idx = 0
+    num_train= 0
 
     for env_name in env_names:
         for tau in taus:
@@ -32,6 +33,10 @@ if __name__ == '__main__':
                     if cur_idx < args.idx:
                         # skip if index not achieved
                         break
+                    elif num_train > args.num_train:
+                        break
+                    else:
+                        num_train +=1
                         
                     """Environment"""
                     # create the atari environments

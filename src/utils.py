@@ -113,7 +113,9 @@ def get_args():
 
     # environment
     parser.add_argument('--idx', type=int, default=4, metavar='IDX',
-                        help='index of the configuration to start from')
+                        help='index of the configuration to start from (inclusive)')
+    parser.add_argument('--num-train', type=int, default=3, metavar='NUM_TRAIN',
+                        help='number of trainings to run')
     parser.add_argument('--env-name', type=str, default='PongNoFrameskip-v4',
                         help='environment name')
     parser.add_argument('--num-envs', type=int, default=4, metavar='NUM_ENVS',
