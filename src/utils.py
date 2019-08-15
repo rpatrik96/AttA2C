@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import argparse
 from enum import Enum
 from os import makedirs
@@ -22,6 +23,13 @@ class AttentionTarget(Enum):
 class RewardType(Enum):
     INTRINSIC_AND_EXTRINSIC = 0
     INTRINSIC_ONLY = 1  # currently not used
+
+def print_plot_details():
+    plt.xlabel("Rollout")
+    plt.ylabel("Value")
+    plt.legend()
+    plt.show()
+
 
 
 class HyperparamScheduler(object):
@@ -112,9 +120,9 @@ def get_args():
                         help='learning rate')
 
     # environment
-    parser.add_argument('--idx', type=int, default=4, metavar='IDX',
+    parser.add_argument('--idx', type=int, default=12, metavar='IDX',
                         help='index of the configuration to start from (inclusive)')
-    parser.add_argument('--num-train', type=int, default=3, metavar='NUM_TRAIN',
+    parser.add_argument('--num-train', type=int, default=4, metavar='NUM_TRAIN',
                         help='number of trainings to run')
     parser.add_argument('--env-name', type=str, default='PongNoFrameskip-v4',
                         help='environment name')
