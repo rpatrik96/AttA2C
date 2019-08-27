@@ -28,6 +28,7 @@ if __name__ == '__main__':
             for attn_target in AttentionTarget:
                 for attn_type in AttentionType:
                     print(env_name, args.curiosity_coeff, attn_target, attn_type, tau)
+
                     # manage start index
                     cur_idx += 1
                         
@@ -42,7 +43,7 @@ if __name__ == '__main__':
                                      lr=args.lr)
 
                     if args.train:
-                        if not(cur_idx < args.idx) and not(num_train > args.num_train):
+                        if cur_idx > args.idx and num_train < args.num_train:
                             """Train"""
 
                             # skip if index not achieved
@@ -61,4 +62,3 @@ if __name__ == '__main__':
                     else:
                         """Eval"""
                         load_and_eval(agent, env)
-
