@@ -30,13 +30,6 @@ if __name__ == '__main__':
                     print(env_name, args.curiosity_coeff, attn_target, attn_type, tau)
                     # manage start index
                     cur_idx += 1
-                    if cur_idx < args.idx:
-                        # skip if index not achieved
-                        break
-                    elif num_train > args.num_train:
-                        break
-                    else:
-                        num_train +=1
                         
                     """Environment"""
                     # create the atari environments
@@ -49,18 +42,23 @@ if __name__ == '__main__':
                                      lr=args.lr)
 
                     if args.train:
-                        """Train"""
-                        param = NetworkParameters(env_name, args.num_envs, args.n_stack, args.rollout_size,
-                                                  args.num_updates, args.max_grad_norm,
-                                                  HyperparamScheduler(args.curiosity_coeff, tau=tau), args.icm_beta,
-                                                  args.value_coeff, args.entropy_coeff, attn_target, attn_type,
-                                                  RewardType.INTRINSIC_AND_EXTRINSIC)
-                        runner = Runner(agent, env, param, args.cuda, args.seed, args.log_dir)
-                        runner.train()
+                        if not(cur_idx < args.idx) and not(num_train > args.num_train):
+                            """Train"""
+
+                            # skip if index not achieved
+                            num_train += 1
+                            param = NetworkParameters(env_name, args.num_envs, args.n_stack, args.rollout_size,
+                                                      args.num_updates, args.max_grad_norm,
+                                                      HyperparamScheduler(args.curiosity_coeff, tau=tau), args.icm_beta,
+                                                      args.value_coeff, args.entropy_coeff, attn_target, attn_type,
+                                                      RewardType.INTRINSIC_AND_EXTRINSIC)
+                            runner = Runner(agent, env, param, args.cuda, args.seed, args.log_dir)
+                            runner.train()
+
+                            if attn_target == AttentionTarget.NONE:
+                                break
 
                     else:
                         """Eval"""
                         load_and_eval(agent, env)
 
-                    if attn_target == AttentionTarget.NONE:
-                        break
