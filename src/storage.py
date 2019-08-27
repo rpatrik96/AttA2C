@@ -145,7 +145,7 @@ class RolloutStorage(object):
 
         # masked_scatter_ copies from #1 where #0 is 1 -> but we need scattering, where
         # the episode is not finished, thus the (1-x)
-        R = self._generate_buffer(self.num_envs).masked_scatter((1 - self.dones[-1]).byte(), final_value)
+        R = self._generate_buffer(self.num_envs).masked_scatter((1 - self.dones[-1]).bool(), final_value)
 
         for i in reversed(range(self.rollout_size)):
             # the reward can only change if we are within the episode
@@ -153,7 +153,7 @@ class RolloutStorage(object):
             # NOTE: this update rule also can handle, if a new episode has started during the rollout
             # in that case an intermediate value will be 0
             # todo: add GAE
-            R = self._generate_buffer(self.num_envs).masked_scatter((1 - self.dones[-1]).byte(),
+            R = self._generate_buffer(self.num_envs).masked_scatter((1 - self.dones[-1]).bool(),
                                                                     self.rewards[i] + discount * R)
 
             r_discounted[i] = R
