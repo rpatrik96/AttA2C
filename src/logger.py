@@ -148,9 +148,20 @@ class EnvLogger(object):
 
         self.logs = {}
 
+        mean_reward = []
+        mean_feat_std = []
+        mean_proxy = []
+
         for timestamp in self.params_df.timestamp:
             self.logs[timestamp] = TemporalLogger(self.env_name, timestamp, self.log_dir, *["rewards", "features"])
             self.logs[timestamp].load(join(self.data_dir, f"time_log_{timestamp}"), self.decimate_step)
+            mean_reward.append(self.logs[timestamp].__dict__["rewards"].mean.mean())
+            mean_feat_std.append(self.logs[timestamp].__dict__["features"].std.mean())
+            mean_proxy.append(mean_reward[-1]*mean_feat_std[-1])
+
+        self.params_df["mean_reward"] = pd.Series(mean_reward, index=self.params_df.index)
+        self.params_df["mean_feat_std"] = pd.Series(mean_feat_std, index=self.params_df.index)
+        self.params_df["mean_proxy"] = pd.Series(mean_proxy, index=self.params_df.index)
 
     def plot_mean_std(self, *args):
         for key, val in self.logs.items():
@@ -158,8 +169,8 @@ class EnvLogger(object):
             val.plot_mean_std(*args)
 
     def plot_proxy(self):
-        for key, val in self.logs.items():
-            print(key)
+        for idx, (key, val) in enumerate(self.logs.items()):
+            print(f'key={key}, proxy_val={self.params_df[self.params_df.timestamp == key]["mean_proxy"][idx]}')
             plt.plot(val.__dict__["features"].std * val.__dict__["rewards"].mean, label=key)
 
         plt.title("Proxy for the reward-exploration problem")

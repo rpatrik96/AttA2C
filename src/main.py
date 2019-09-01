@@ -58,6 +58,8 @@ if __name__ == '__main__':
 
                             if attn_target == AttentionTarget.NONE:
                                 break
+                        elif num_train == args.num_train:
+                            exit()
 
                     else:
                         """Eval"""
