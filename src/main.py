@@ -14,9 +14,9 @@ if __name__ == '__main__':
 
     # print("-------------ATTENTION IS ACTIVE-------------")
 
-    env_names = ["PongNoFrameskip-v0", "PongNoFrameskip-v4",
-                 "BreakoutNoFrameskip-v0", "BreakoutNoFrameskip-v4",
-                 "SeaquestNoFrameskip-v0", "SeaquestNoFrameskip-v4"]
+    env_names = ["PongNoFrameskip-v0", #"PongNoFrameskip-v4",
+                 "BreakoutNoFrameskip-v0", #"BreakoutNoFrameskip-v4",
+                 "SeaquestNoFrameskip-v0"]#, "SeaquestNoFrameskip-v4"]
 
     taus = [0.000001, 50000, 300000]
 
@@ -56,10 +56,13 @@ if __name__ == '__main__':
                             runner = Runner(agent, env, param, args.cuda, args.seed, args.log_dir)
                             runner.train()
 
-                            if attn_target == AttentionTarget.NONE:
-                                break
+
                         elif num_train == args.num_train:
                             exit()
+
+                        
+                        if attn_target == AttentionTarget.NONE:
+                                break
 
                     else:
                         """Eval"""
