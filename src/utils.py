@@ -17,6 +17,7 @@ class AttentionTarget(Enum):
     NONE = 0
     ICM = 1
     A2C = 2
+    ICM_LOSS = 3
 
 
 class RewardType(Enum):
@@ -63,7 +64,7 @@ class HyperparamScheduler(object):
 
 class NetworkParameters(object):
     def __init__(self, env_name: str, num_envs: int, n_stack: int, rollout_size: int = 5, num_updates: int = 2500000,
-                 max_grad_norm: float = 0.5, curiosity_coeff: float = 0.0,
+                 max_grad_norm: float = 0.5,
                  icm_beta: float = 0.2, value_coeff: float = 0.5, entropy_coeff: float = 0.02,
                  attention_target: AttentionTarget = AttentionTarget.NONE,
                  attention_type: AttentionType = AttentionType.SINGLE_ATTENTION,
@@ -74,7 +75,6 @@ class NetworkParameters(object):
         self.rollout_size = rollout_size
         self.num_updates = num_updates
         self.max_grad_norm = max_grad_norm
-        self.curiosity_coeff = curiosity_coeff
         self.icm_beta = icm_beta
         self.value_coeff = value_coeff
         self.entropy_coeff = entropy_coeff
