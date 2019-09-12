@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import argparse
 from enum import Enum
-from os import makedirs
-from os.path import isdir, isfile, join
+from os import makedirs, listdir
+from os.path import isdir, isfile, join, dirname, abspath
 
 import numpy as np
 import pandas as pd
@@ -165,3 +165,25 @@ def load_and_eval(agent, env):
         action, _, _ = agent.get_action(tensor)
         obs, rewards, dones, info = env.step(action)
         env.render()
+
+
+def merge_tables():
+    # iterate over tables
+    log_dir = join(dirname(dirname(abspath(__file__))), "log")
+    
+    
+    for env_dir in listdir(log_dir):
+        stocks = []
+        data_dir = join(log_dir, env_dir)
+        for table in listdir(data_dir):
+            if table.endswith(".tsv"):
+                stock_df = pd.read_csv(join(data_dir, table), sep="\t")
+                stocks.append(stock_df)
+        pd.concat(stocks, axis=0, sort=True).to_csv(join(data_dir,"params.tsv"), sep="\t", index=False)
+
+
+    
+
+if __name__ == '__main__':
+    merge_tables()
+
