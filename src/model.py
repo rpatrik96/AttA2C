@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
 
-from utils import AttentionType
+from utils import AttentionType, AttentionTarget
 
 
 def init(module, weight_init, bias_init, gain=1):
@@ -215,11 +215,11 @@ class ForwardNet(nn.Module):
 
 
 class AdversarialHead(nn.Module):
-    def __init__(self, feat_size, num_actions, attention, attention_type):
+    def __init__(self, feat_size, num_actions, attn_target, attention_type):
         """
         Network for exploiting the forward and inverse dynamics
 
-        :param attention:
+        :param attn_target:
         :param attention_type:
         :param feat_size: size of the feature space
         :param num_actions: size of the action space, pass env.action_space.n
@@ -236,9 +236,9 @@ class AdversarialHead(nn.Module):
 
         # attention
         self.attention_type = attention_type
-        self.attention = attention
+        self.attn_target = attn_target
 
-        if self.attention:
+        if self.attn_target is AttentionTarget.ICM:
             if self.attention_type == AttentionType.SINGLE_ATTENTION:
                 self.fwd_att = AttentionNet(self.feat_size + self.num_actions)
                 self.inv_att = AttentionNet(2 * self.feat_size)
@@ -266,7 +266,7 @@ class AdversarialHead(nn.Module):
         action_one_hot = torch.zeros(action.shape[0], self.num_actions, device=self.fwd_net.fc1.weight.device) \
             .scatter_(1, action.long().view(-1, 1), 1)
 
-        if self.attention:
+        if self.attn_target is AttentionTarget.ICM:
             if self.attention_type == AttentionType.SINGLE_ATTENTION:
                 fwd_in = self.fwd_att(torch.cat((current_feature, action_one_hot), 1))
             elif self.attention_type == AttentionType.DOUBLE_ATTENTION:
@@ -278,7 +278,7 @@ class AdversarialHead(nn.Module):
 
         """Inverse dynamics"""
         # predict the action between s_t and s_t1
-        if self.attention:
+        if self.attn_target is AttentionTarget.ICM:
             if self.attention_type == AttentionType.SINGLE_ATTENTION:
                 inv_in = self.inv_att(torch.cat((current_feature, next_feature), 1))
             elif self.attention_type == AttentionType.DOUBLE_ATTENTION:
@@ -292,13 +292,13 @@ class AdversarialHead(nn.Module):
 
 
 class ICMNet(nn.Module):
-    def __init__(self, n_stack, num_actions, attention, attn_type, in_size=288, feat_size=256):
+    def __init__(self, n_stack, num_actions, attn_target, attn_type, in_size=288, feat_size=256):
         """
         Network implementing the Intrinsic Curiosity Module (ICM) of https://arxiv.org/abs/1705.05363
 
         :param n_stack: number of frames stacked
         :param num_actions: dimensionality of the action space, pass env.action_space.n
-        :param attention:
+        :param attn_target:
         :param attn_type:
         :param in_size: input size of the AdversarialHeads
         :param feat_size: size of the feature space
@@ -312,7 +312,7 @@ class ICMNet(nn.Module):
 
         # networks
         self.feat_enc_net = FeatureEncoderNet(n_stack, self.in_size, is_lstm=False)
-        self.pred_net = AdversarialHead(self.in_size, self.num_actions, attention,
+        self.pred_net = AdversarialHead(self.in_size, self.num_actions, attn_target,
                                         attn_type)  # goal: minimize prediction error
         # self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
         # (i.e. predict states which can contain new information)
@@ -345,13 +345,14 @@ class ICMNet(nn.Module):
 
 
 class A2CNet(nn.Module):
-    def __init__(self, n_stack, num_actions, attention, in_size=288):
+    def __init__(self, n_stack, num_actions, attn_type, attn_target, in_size=288):
         """
         Implementation of the Advantage Actor-Critic (A2C) network
 
+        :param attn_target:
         :param n_stack: number of frames stacked
         :param num_actions: size of the action space, pass env.action_space.n
-        :param attention:
+        :param attn_type:
         :param in_size: input size of the LSTMCell of the FeatureEncoderNet
         """
         super().__init__()
@@ -361,7 +362,9 @@ class A2CNet(nn.Module):
         self.num_actions = num_actions
 
         # attention
-        self.attention = attention
+        self.attn_type = attn_type
+        self.attn_target = attn_target
+        self.attention = self.attn_target is AttentionTarget.A2C and self.attn_type is AttentionType.SINGLE_ATTENTION
 
         # networks
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.

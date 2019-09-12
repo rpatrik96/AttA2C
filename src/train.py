@@ -60,17 +60,11 @@ class Runner(object):
                 self.storage.states.view(-1, self.params.n_stack, *self.storage.frame_shape),
                 self.storage.actions.view(-1))
 
-            """Curiosity loss"""
-            # how bad it can predict the next state
-            curiosity_loss = (self.storage.features[1:, :, :]
-                              .view(-1, self.storage.feature_size) - feature_pred.detach()).pow(2).mean()
-
             """Assemble loss"""
             policy_loss, value_loss, rewards = self.storage.a2c_loss(final_value)
 
             loss = self.a2c_loss(entropy, policy_loss, value_loss) \
-                   + self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions) \
-                   - self.params.curiosity_coeff.value * curiosity_loss
+                   + self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions)
 
             loss.backward(retain_graph=False)
 
@@ -89,15 +83,13 @@ class Runner(object):
             # grow out of memory, so it is crucial to reset
             self.storage.after_update()
 
-            # update curiosity loss, it should be decreased, otherwise, the feature distribution will not be normal
-            self.params.curiosity_coeff.step()
 
             # if loss < best_loss:
             #     best_loss = loss.item()
             #     print("model saved with best loss: ", best_loss, " at update #", num_update)
             #     torch.save(self.net.state_dict(), "a2c_best_loss_no_norm")
 
-            if num_update % 100 == 0:
+            if num_update % 1000 == 0:
                 print("current loss: ", loss.item(), " at update #", num_update)
                 self.storage.print_reward_stats()
                 # torch.save(self.net.state_dict(), "a2c_time_log_no_norm")
