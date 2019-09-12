@@ -1,9 +1,8 @@
-import matplotlib.pyplot as plt
-import argparse
 from enum import Enum
 from os import makedirs, listdir
 from os.path import isdir, isfile, join, dirname, abspath
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
@@ -24,12 +23,12 @@ class RewardType(Enum):
     INTRINSIC_AND_EXTRINSIC = 0
     INTRINSIC_ONLY = 1  # currently not used
 
+
 def print_plot_details():
     plt.xlabel("Rollout")
     plt.ylabel("Value")
     plt.legend()
     plt.show()
-
 
 
 class HyperparamScheduler(object):
@@ -64,7 +63,7 @@ class HyperparamScheduler(object):
 
 class NetworkParameters(object):
     def __init__(self, env_name: str, num_envs: int, n_stack: int, rollout_size: int = 5, num_updates: int = 2500000,
-                 max_grad_norm: float = 0.5, curiosity_coeff: HyperparamScheduler = HyperparamScheduler(0.0, 0.0),
+                 max_grad_norm: float = 0.5, curiosity_coeff: float = 0.0,
                  icm_beta: float = 0.2, value_coeff: float = 0.5, entropy_coeff: float = 0.02,
                  attention_target: AttentionTarget = AttentionTarget.NONE,
                  attention_type: AttentionType = AttentionType.SINGLE_ATTENTION,
@@ -84,8 +83,7 @@ class NetworkParameters(object):
         self.reward_type = reward_type
 
     def save(self, data_dir, timestamp):
-        param_dict = {**self.__dict__, **self.curiosity_coeff.__dict__, "timestamp": timestamp}
-        del param_dict["curiosity_coeff"]
+        param_dict = {**self.__dict__, "timestamp": timestamp}
 
         df_path = join(data_dir, "params.tsv")
 
@@ -95,58 +93,6 @@ class NetworkParameters(object):
             index=False,
             header=True if not isfile(df_path) else False,
             mode='a')
-
-
-def get_args():
-    """
-    Function for handling command line arguments
-
-    :return: parsed   command line arguments
-    """
-    parser = argparse.ArgumentParser(description='Curiosity-driven deep RL with A2C+ICM')
-
-    # training
-    parser.add_argument('--train', action='store_true', default=True,
-                        help='train flag (False->load model)')
-    parser.add_argument('--cuda', action='store_true', default=True,
-                        help='CUDA flag')
-    parser.add_argument('--log-dir', type=str, default="../log",
-                        help='log directory for Tensorboard')
-    parser.add_argument('--seed', type=int, default=42, metavar='SEED',
-                        help='random seed')
-    parser.add_argument('--max-grad_norm', type=float, default=.5, metavar='MAX_GRAD_NORM',
-                        help='threshold for gradient clipping')
-    parser.add_argument('--lr', type=float, default=1e-4, metavar='LR',
-                        help='learning rate')
-
-    # environment
-    parser.add_argument('--idx', type=int, default=13, metavar='IDX',
-                        help='index of the configuration to start from (inclusive)')
-    parser.add_argument('--num-train', type=int, default=6, metavar='NUM_TRAIN',
-                        help='number of trainings to run')
-    parser.add_argument('--env-name', type=str, default='PongNoFrameskip-v4',
-                        help='environment name')
-    parser.add_argument('--num-envs', type=int, default=4, metavar='NUM_ENVS',
-                        help='number of parallel environments')
-    parser.add_argument('--n-stack', type=int, default=4, metavar='N_STACK',
-                        help='number of frames stacked')
-    parser.add_argument('--rollout-size', type=int, default=5, metavar='ROLLOUT_SIZE',
-                        help='rollout size')
-    parser.add_argument('--num-updates', type=int, default=2500000, metavar='NUM_UPDATES',
-                        help='number of updates')
-
-    # model coefficients
-    parser.add_argument('--curiosity-coeff', type=float, default=.02, metavar='CURIOSITY_COEFF',
-                        help='curiosity-based exploration coefficient')
-    parser.add_argument('--icm-beta', type=float, default=.2, metavar='ICM_BETA',
-                        help='beta for the ICM module')
-    parser.add_argument('--value-coeff', type=float, default=.5, metavar='VALUE_COEFF',
-                        help='value loss weight factor in the A2C loss')
-    parser.add_argument('--entropy-coeff', type=float, default=.02, metavar='ENTROPY_COEFF',
-                        help='entropy loss weight factor in the A2C loss')
-
-    # Argument parsing
-    return parser.parse_args()
 
 
 def make_dir(dirname):
@@ -170,8 +116,7 @@ def load_and_eval(agent, env):
 def merge_tables():
     # iterate over tables
     log_dir = join(dirname(dirname(abspath(__file__))), "log")
-    
-    
+
     for env_dir in listdir(log_dir):
         stocks = []
         data_dir = join(log_dir, env_dir)
@@ -179,11 +124,8 @@ def merge_tables():
             if table.endswith(".tsv"):
                 stock_df = pd.read_csv(join(data_dir, table), sep="\t")
                 stocks.append(stock_df)
-        pd.concat(stocks, axis=0, sort=True).to_csv(join(data_dir,"params.tsv"), sep="\t", index=False)
+        pd.concat(stocks, axis=0, sort=True).to_csv(join(data_dir, "params.tsv"), sep="\t", index=False)
 
-
-    
 
 if __name__ == '__main__':
     merge_tables()
-

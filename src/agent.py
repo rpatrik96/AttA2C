@@ -32,9 +32,7 @@ class ICMAgent(nn.Module):
 
         # networks
         self.icm = ICMNet(self.n_stack, self.num_actions, attn_type, attn_type, self.in_size, self.feat_size)
-        self.a2c = A2CNet(self.n_stack, self.num_actions, attn_target, self.in_size)
-        self.icm.attn_target = self.a2c.attn_target = attn_target
-        self.icm.attn_type = self.a2c.attn_type = attn_type
+        self.a2c = A2CNet(self.n_stack, self.num_actions, attn_type, attn_target, self.in_size)
 
         if self.is_cuda:
             self.icm.cuda()
