@@ -26,8 +26,10 @@ if __name__ == '__main__':
     for env_name in env_names:
         for attn_target in AttentionTarget:
             for attn_type in AttentionType:
-                if attn_target == AttentionTarget.A2C and attn_type == AttentionType.DOUBLE_ATTENTION:
+                if (attn_target == AttentionTarget.A2C or attn_target == AttentionTarget.ICM_LOSS) and attn_type == AttentionType.DOUBLE_ATTENTION:
                     break
+
+
 
                 print(env_name, attn_target, attn_type)
 

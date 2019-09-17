@@ -358,7 +358,7 @@ class ICMNet(nn.Module):
             loss_fwd = self.loss_attn(F.mse_loss(feature_preds, features, reduction="none"), features).mean()
         # inverse loss
         # how good is the action estimate between states
-        loss_inv = F.cross_entropy(action_preds.view(-1, self.net.num_actions), actions.long())
+        loss_inv = F.cross_entropy(action_preds.view(-1, self.num_actions), actions.long())
 
         return loss_fwd + loss_inv
 
