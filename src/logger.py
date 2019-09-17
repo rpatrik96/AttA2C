@@ -175,3 +175,19 @@ class EnvLogger(object):
 
         plt.title("Proxy for the reward-exploration problem")
         print_plot_details()
+
+    def plot_rewards(self):
+        for idx, (key, val) in enumerate(self.logs.items()):
+            print(f'key={key}, mean_reward={self.params_df[self.params_df.timestamp == key]["mean_reward"][idx]}')
+            plt.plot(val.__dict__["rewards"].mean, label=key)
+
+        plt.title("Mean rewards for the reward-exploration problem")
+        print_plot_details()
+
+    def plot_feat_std(self):
+        for idx, (key, val) in enumerate(self.logs.items()):
+            print(f'key={key}, mean_reward={self.params_df[self.params_df.timestamp == key]["mean_reward"][idx]}')
+            plt.plot(val.__dict__["features"].std , label=key)
+
+        plt.title("Feature standard deviation for the reward-exploration problem")
+        print_plot_details()
