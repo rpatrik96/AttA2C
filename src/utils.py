@@ -126,6 +126,28 @@ def merge_tables():
                 stocks.append(stock_df)
         pd.concat(stocks, axis=0, sort=True).to_csv(join(data_dir, "params.tsv"), sep="\t", index=False)
 
+def numpy_ewma_vectorized_v2(data, window):
+    """
+    Source: https://stackoverflow.com/a/42926270
+    :param data:
+    :param window:
+    :return:
+    """
+
+    alpha = 2 /(window + 1.0)
+    alpha_rev = 1-alpha
+    n = data.shape[0]
+
+    pows = alpha_rev**(np.arange(n+1))
+
+    scale_arr = 1/pows[:-1]
+    offset = data[0]*pows[1:]
+    pw0 = alpha*alpha_rev**(n-1)
+
+    mult = data*pw0*scale_arr
+    cumsums = mult.cumsum()
+    out = offset + cumsums*scale_arr[::-1]
+    return out
 
 if __name__ == '__main__':
     merge_tables()
