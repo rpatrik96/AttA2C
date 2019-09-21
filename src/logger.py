@@ -5,8 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from utils import make_dir
-from utils import print_plot_details
+from utils import make_dir, numpy_ewma_vectorized_v2, print_plot_details
 
 
 class LogData(object):
@@ -157,7 +156,7 @@ class EnvLogger(object):
             self.logs[timestamp].load(join(self.data_dir, f"time_log_{timestamp}"), self.decimate_step)
             mean_reward.append(self.logs[timestamp].__dict__["rewards"].mean.mean())
             mean_feat_std.append(self.logs[timestamp].__dict__["features"].std.mean())
-            mean_proxy.append(mean_reward[-1]*mean_feat_std[-1])
+            mean_proxy.append(mean_reward[-1] * mean_feat_std[-1])
 
         self.params_df["mean_reward"] = pd.Series(mean_reward, index=self.params_df.index)
         self.params_df["mean_feat_std"] = pd.Series(mean_feat_std, index=self.params_df.index)
@@ -168,10 +167,32 @@ class EnvLogger(object):
             print(key)
             val.plot_mean_std(*args)
 
-    def plot_proxy(self):
+    def plot_proxy(self, window=1000):
         for idx, (key, val) in enumerate(self.logs.items()):
             print(f'key={key}, proxy_val={self.params_df[self.params_df.timestamp == key]["mean_proxy"][idx]}')
-            plt.plot(val.__dict__["features"].std * val.__dict__["rewards"].mean, label=key)
+            plt.plot(numpy_ewma_vectorized_v2(val.__dict__["features"].std, window) * numpy_ewma_vectorized_v2(
+                val.__dict__["rewards"].mean, window), label=key)
 
         plt.title("Proxy for the reward-exploration problem")
+        print_plot_details()
+
+    def plot_rewards(self, window=1000, std_scale=1):
+
+        for idx, (key, val) in enumerate(self.logs.items()):
+            print(f'key={key}, mean_reward={self.params_df[self.params_df.timestamp == key]["mean_reward"][idx]}')
+            ewma_mean = numpy_ewma_vectorized_v2(val.__dict__["rewards"].mean, window)
+            ewma_std = numpy_ewma_vectorized_v2(val.__dict__["rewards"].std, window)
+            plt.plot(ewma_mean, label=key)
+            plt.fill_between(range(len(val.__dict__["rewards"].mean)), ewma_mean + std_scale * ewma_std,
+                             ewma_mean - std_scale * ewma_std, alpha=.2)
+
+        plt.title("Mean rewards for the reward-exploration problem")
+        print_plot_details()
+
+    def plot_feat_std(self, window=1000):
+        for idx, (key, val) in enumerate(self.logs.items()):
+            print(f'key={key}, feat_std={self.params_df[self.params_df.timestamp == key]["mean_reward"][idx]}')
+            plt.plot(numpy_ewma_vectorized_v2(val.__dict__["features"].std, window), label=key)
+
+        plt.title("Feature standard deviation for the reward-exploration problem")
         print_plot_details()

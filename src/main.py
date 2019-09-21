@@ -26,8 +26,10 @@ if __name__ == '__main__':
     for env_name in env_names:
         for attn_target in AttentionTarget:
             for attn_type in AttentionType:
-                if attn_target == AttentionTarget.A2C and attn_type == AttentionType.DOUBLE_ATTENTION:
+                if (attn_target == AttentionTarget.A2C or attn_target == AttentionTarget.ICM_LOSS) and attn_type == AttentionType.DOUBLE_ATTENTION:
                     break
+
+
 
                 print(env_name, attn_target, attn_type)
 
@@ -52,8 +54,7 @@ if __name__ == '__main__':
                         # skip if index not achieved
                         num_train += 1
                         param = NetworkParameters(env_name, args.num_envs, args.n_stack, args.rollout_size,
-                                                  args.num_updates, args.max_grad_norm,
-                                                  0.0, args.icm_beta,
+                                                  args.num_updates, args.max_grad_norm, args.icm_beta,
                                                   args.value_coeff, args.entropy_coeff, attn_target, attn_type,
                                                   RewardType.INTRINSIC_AND_EXTRINSIC)
                         runner = Runner(agent, env, param, args.cuda, args.seed, args.log_dir)

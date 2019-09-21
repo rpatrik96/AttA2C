@@ -15,7 +15,7 @@ def get_args():
     parser.add_argument('--cuda', action='store_true', default=True,
                         help='CUDA flag')
     parser.add_argument('--log-dir', type=str, default="../log",
-                        help='log directory for Tensorboard')
+                        help='log directory')
     parser.add_argument('--seed', type=int, default=42, metavar='SEED',
                         help='random seed')
     parser.add_argument('--max-grad_norm', type=float, default=.5, metavar='MAX_GRAD_NORM',

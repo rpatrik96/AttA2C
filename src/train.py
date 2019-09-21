@@ -4,7 +4,6 @@ from time import gmtime, strftime
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from logger import TemporalLogger
 from storage import RolloutStorage
@@ -55,16 +54,16 @@ class Runner(object):
             # tensors for the curiosity-based loss
             # feature, feature_pred: fwd_loss
             # a_t_pred: inv_loss
-            feature, feature_pred, a_t_pred = self.net.icm(
+            icm_loss = self.net.icm(
                 self.params.num_envs,
                 self.storage.states.view(-1, self.params.n_stack, *self.storage.frame_shape),
                 self.storage.actions.view(-1))
 
             """Assemble loss"""
-            policy_loss, value_loss, rewards = self.storage.a2c_loss(final_value)
+            a2c_loss, rewards = self.storage.a2c_loss(final_value, entropy, self.params.value_coeff,
+                                                      self.params.entropy_coeff)
 
-            loss = self.a2c_loss(entropy, policy_loss, value_loss) \
-                   + self.icm_loss(feature, feature_pred, a_t_pred, self.storage.actions)
+            loss = a2c_loss + icm_loss
 
             loss.backward(retain_graph=False)
 
@@ -83,7 +82,6 @@ class Runner(object):
             # grow out of memory, so it is crucial to reset
             self.storage.after_update()
 
-
             # if loss < best_loss:
             #     best_loss = loss.item()
             #     print("model saved with best loss: ", best_loss, " at update #", num_update)
@@ -98,11 +96,6 @@ class Runner(object):
 
         self.logger.save(*["rewards", "features"])
         self.params.save(self.logger.data_dir, self.timestamp)
-
-    def a2c_loss(self, entropy, policy_loss, value_loss):
-        return policy_loss \
-               + self.params.value_coeff * value_loss \
-               - self.params.entropy_coeff * entropy
 
     def episode_rollout(self):
         episode_entropy = 0
@@ -132,15 +125,3 @@ class Runner(object):
         self.storage.features[step + 1].copy_(final_features)
 
         return final_value, episode_entropy
-
-    def icm_loss(self, features, feature_preds, action_preds, actions):
-
-        # forward loss
-        # measure of how good features can be predicted
-        loss_fwd = F.mse_loss(feature_preds, features)
-
-        # inverse loss
-        # how good is the action estimate between states
-        loss_inv = F.cross_entropy(action_preds.view(-1, self.net.num_actions), actions.long().view(-1))
-
-        return loss_fwd + loss_inv

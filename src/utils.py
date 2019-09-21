@@ -17,6 +17,7 @@ class AttentionTarget(Enum):
     NONE = 0
     ICM = 1
     A2C = 2
+    ICM_LOSS = 3
 
 
 class RewardType(Enum):
@@ -63,7 +64,7 @@ class HyperparamScheduler(object):
 
 class NetworkParameters(object):
     def __init__(self, env_name: str, num_envs: int, n_stack: int, rollout_size: int = 5, num_updates: int = 2500000,
-                 max_grad_norm: float = 0.5, curiosity_coeff: float = 0.0,
+                 max_grad_norm: float = 0.5,
                  icm_beta: float = 0.2, value_coeff: float = 0.5, entropy_coeff: float = 0.02,
                  attention_target: AttentionTarget = AttentionTarget.NONE,
                  attention_type: AttentionType = AttentionType.SINGLE_ATTENTION,
@@ -74,7 +75,6 @@ class NetworkParameters(object):
         self.rollout_size = rollout_size
         self.num_updates = num_updates
         self.max_grad_norm = max_grad_norm
-        self.curiosity_coeff = curiosity_coeff
         self.icm_beta = icm_beta
         self.value_coeff = value_coeff
         self.entropy_coeff = entropy_coeff
@@ -126,6 +126,28 @@ def merge_tables():
                 stocks.append(stock_df)
         pd.concat(stocks, axis=0, sort=True).to_csv(join(data_dir, "params.tsv"), sep="\t", index=False)
 
+def numpy_ewma_vectorized_v2(data, window):
+    """
+    Source: https://stackoverflow.com/a/42926270
+    :param data:
+    :param window:
+    :return:
+    """
+
+    alpha = 2 /(window + 1.0)
+    alpha_rev = 1-alpha
+    n = data.shape[0]
+
+    pows = alpha_rev**(np.arange(n+1))
+
+    scale_arr = 1/pows[:-1]
+    offset = data[0]*pows[1:]
+    pw0 = alpha*alpha_rev**(n-1)
+
+    mult = data*pw0*scale_arr
+    cumsums = mult.cumsum()
+    out = offset + cumsums*scale_arr[::-1]
+    return out
 
 if __name__ == '__main__':
     merge_tables()

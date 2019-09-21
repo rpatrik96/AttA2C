@@ -69,8 +69,8 @@ class AttentionNet(nn.Module):
 
         self.attention = nn.Linear(self.attention_size, self.attention_size)
 
-    def forward(self, x):
-        return x * F.softmax(self.attention(x), dim=-1)
+    def forward(self, target, attn=None):
+        return target * F.softmax(self.attention(target if attn is None else attn), dim=-1)
 
 
 class FeatureEncoderNet(nn.Module):
@@ -317,6 +317,10 @@ class ICMNet(nn.Module):
         # self.policy_net = AdversarialHead(self.in_size, self.num_actions)  # goal: maximize prediction error
         # (i.e. predict states which can contain new information)
 
+        self.loss_attn_flag = attn_target is AttentionTarget.ICM_LOSS and attn_type is AttentionType.SINGLE_ATTENTION
+        if self.loss_attn_flag:
+            self.loss_attn = AttentionNet(self.feat_size)
+
     def forward(self, num_envs, states, action):
         """
 
@@ -341,7 +345,22 @@ class ICMNet(nn.Module):
         next_feature_pred, action_pred = self.pred_net(feature, next_feature, action)
         # phi_t1_policy, a_t_policy = self.policy_net(feature, next_feature, a_t)
 
-        return next_feature, next_feature_pred, action_pred  # (next_feature_pred, action_pred), (phi_t1_policy, a_t_policy)
+        return self._calc_loss(next_feature, next_feature_pred, action_pred, action)
+
+
+    def _calc_loss(self, features, feature_preds, action_preds, actions):
+
+        # forward loss
+        # measure of how good features can be predicted
+        if not self.loss_attn_flag:
+            loss_fwd = F.mse_loss(feature_preds, features)
+        else:
+            loss_fwd = self.loss_attn(F.mse_loss(feature_preds, features, reduction="none"), features).mean()
+        # inverse loss
+        # how good is the action estimate between states
+        loss_inv = F.cross_entropy(action_preds.view(-1, self.num_actions), actions.long())
+
+        return loss_fwd + loss_inv
 
 
 class A2CNet(nn.Module):

@@ -160,7 +160,7 @@ class RolloutStorage(object):
 
         return r_discounted
 
-    def a2c_loss(self, final_value):
+    def a2c_loss(self, final_value, entropy, value_coeff, entropy_coeff):
         # due to the fact that batches can be shorter (e.g. if an env is finished already)
         # MEAN is used instead of SUM
         # calculate advantage
@@ -176,7 +176,10 @@ class RolloutStorage(object):
         # and predicted rewards
         value_loss = advantage.pow(2).mean()
 
-        return policy_loss, value_loss, rewards.detach().cpu().numpy()
+        # construct loss
+        loss = policy_loss + value_coeff * value_loss - entropy_coeff * entropy
+
+        return loss, rewards.detach().cpu().numpy()
 
     def log_episode_rewards(self, infos):
         """
