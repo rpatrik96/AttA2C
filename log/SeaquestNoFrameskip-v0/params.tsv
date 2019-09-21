@@ -1,3 +1,6 @@
 env_name	num_envs	n_stack	rollout_size	num_updates	max_grad_norm	curiosity_coeff	icm_beta	value_coeff	entropy_coeff	attention_target	attention_type	reward_type	timestamp
+SeaquestNoFrameskip-v0	4	4	5	2500000	0.5	0.0	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.DOUBLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-17 11_04_54
+SeaquestNoFrameskip-v0	4	4	5	2500000	0.5	0.0	0.2	0.5	0.02	AttentionTarget.A2C	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-19 00_07_03
 SeaquestNoFrameskip-v0	4	4	5	2500000	0.5	0.0	0.2	0.5	0.02	AttentionTarget.NONE	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-12 11_12_02
 SeaquestNoFrameskip-v0	4	4	5	2500000	0.5	0.0	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-14 01_05_00
+SeaquestNoFrameskip-v0	4	4	5	2500000	0.5	0.0	0.2	0.5	0.02	AttentionTarget.ICM_LOSS	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-19 08_42_15

@@ -2,3 +2,5 @@ env_name	num_envs	n_stack	rollout_size	num_updates	max_grad_norm	curiosity_coeff
 BreakoutNoFrameskip-v0	4	4	5	2500000	0.5	0.0	0.2	0.5	0.02	AttentionTarget.NONE	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-13 15_35_51
 BreakoutNoFrameskip-v0	4	4	5	2500000	0.5	0.0	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-14 19_09_01
 BreakoutNoFrameskip-v0	4	4	5	2500000	0.5	0.0	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.DOUBLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-15 22_42_16
+BreakoutNoFrameskip-v0	4	4	5	2500000	0.5	0.0	0.2	0.5	0.02	AttentionTarget.A2C	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-17 00_55_42
+BreakoutNoFrameskip-v0	4	4	5	2500000	0.5	0.0	0.2	0.5	0.02	AttentionTarget.ICM_LOSS	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-18 07_00_09
