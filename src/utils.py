@@ -101,14 +101,14 @@ def make_dir(dirname):
 
 
 def load_and_eval(agent, env):
-    agent.load_state_dict(torch.load("a2c_best_loss"))
+    agent.load_state_dict(torch.load("best_agent"))
     agent.eval()
 
     obs = env.reset()
     for i in range(1000):
         tensor = torch.from_numpy(obs.transpose((0, 3, 1, 2))).float() / 255.
         tensor = tensor.cuda() if torch.cuda.is_available() else tensor
-        action, _, _ = agent.get_action(tensor)
+        action, _, _,_,_ = agent.a2c.get_action(tensor)
         obs, rewards, dones, info = env.step(action)
         env.render()
 

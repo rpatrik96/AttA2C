@@ -82,10 +82,10 @@ class Runner(object):
             # grow out of memory, so it is crucial to reset
             self.storage.after_update()
 
-            # if loss < best_loss:
-            #     best_loss = loss.item()
-            #     print("model saved with best loss: ", best_loss, " at update #", num_update)
-            #     torch.save(self.net.state_dict(), "a2c_best_loss_no_norm")
+            if loss < best_loss:
+                best_loss = loss.item()
+                print("model saved with best loss: ", best_loss, " at update #", num_update)
+                torch.save(self.net.state_dict(), "best_agent")
 
             if num_update % 1000 == 0:
                 print("current loss: ", loss.item(), " at update #", num_update)
