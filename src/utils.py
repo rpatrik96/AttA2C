@@ -108,7 +108,7 @@ def load_and_eval(agent, env):
     for i in range(1000):
         tensor = torch.from_numpy(obs.transpose((0, 3, 1, 2))).float() / 255.
         tensor = tensor.cuda() if torch.cuda.is_available() else tensor
-        action, _, _,_,_ = agent.a2c.get_action(tensor)
+        action, _, _, _, _ = agent.a2c.get_action(tensor)
         obs, rewards, dones, info = env.step(action)
         env.render()
 
@@ -126,6 +126,7 @@ def merge_tables():
                 stocks.append(stock_df)
         pd.concat(stocks, axis=0, sort=True).to_csv(join(data_dir, "params.tsv"), sep="\t", index=False)
 
+
 def numpy_ewma_vectorized_v2(data, window):
     """
     Source: https://stackoverflow.com/a/42926270
@@ -134,20 +135,62 @@ def numpy_ewma_vectorized_v2(data, window):
     :return:
     """
 
-    alpha = 2 /(window + 1.0)
-    alpha_rev = 1-alpha
+    alpha = 2 / (window + 1.0)
+    alpha_rev = 1 - alpha
     n = data.shape[0]
 
-    pows = alpha_rev**(np.arange(n+1))
+    pows = alpha_rev ** (np.arange(n + 1))
 
-    scale_arr = 1/pows[:-1]
-    offset = data[0]*pows[1:]
-    pw0 = alpha*alpha_rev**(n-1)
+    scale_arr = 1 / pows[:-1]
+    offset = data[0] * pows[1:]
+    pw0 = alpha * alpha_rev ** (n - 1)
 
-    mult = data*pw0*scale_arr
+    mult = data * pw0 * scale_arr
     cumsums = mult.cumsum()
-    out = offset + cumsums*scale_arr[::-1]
+    out = offset + cumsums * scale_arr[::-1]
     return out
+
+
+class AgentCheckpointer(object):
+
+    def __init__(self, env_name, num_updates, timestamp, log_dir=None, log_points=(.25, .5, .75, .99)) -> None:
+        super().__init__()
+
+        # constants
+        self.timestamp = timestamp
+        self.num_updates = num_updates
+        self.update_cntr = 0
+        self.best_loss = np.inf
+        self.best_reward = -np.inf
+        log_keys = np.int32(self.num_updates * np.array(log_points)).tolist()
+        self.log_points = dict(zip(log_keys, log_points))
+
+        # file structure
+        self.base_dir = join(dirname(dirname(abspath(__file__))), "log") if log_dir is None else log_dir
+        self.data_dir = join(self.base_dir, env_name)
+        make_dir(self.base_dir)
+        make_dir(self.data_dir)
+
+    def checkpoint(self, loss, reward, agent):
+        mean_reward = np.array(reward).mean()
+
+        # save agent with lowest loss
+        if loss < self.best_loss:
+            self.best_loss = loss.item()
+            torch.save(agent.state_dict(), join(self.data_dir, f"agent_best_loss_{self.timestamp}"))
+
+        # save agent with highest mean reward
+        if mean_reward > self.best_reward:
+            self.best_reward = mean_reward
+            torch.save(agent.state_dict(), join(self.data_dir, f"agent_best_reward_{self.timestamp}"))
+
+        # save agent at specific time intervals
+        if self.update_cntr in self.log_points.keys():
+            torch.save(agent.state_dict(),
+                       join(self.data_dir, f"agent_step_{self.log_points[self.update_cntr]}_{self.timestamp}"))
+
+        self.update_cntr += 1
+
 
 if __name__ == '__main__':
     merge_tables()

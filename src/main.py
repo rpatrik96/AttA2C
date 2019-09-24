@@ -2,23 +2,20 @@ from stable_baselines.common.cmd_util import make_atari_env
 from stable_baselines.common.vec_env import VecFrameStack
 
 from agent import ICMAgent
+from args import get_args
 from train import Runner
 # constants
 from utils import AttentionTarget, AttentionType, RewardType
 from utils import load_and_eval, NetworkParameters
-from args import get_args
 
 if __name__ == '__main__':
 
     """Argument parsing"""
     args = get_args()
 
-    # print("-------------ATTENTION IS ACTIVE-------------")
-
     env_names = ["PongNoFrameskip-v0",  # "PongNoFrameskip-v4",
                  "BreakoutNoFrameskip-v0",  # "BreakoutNoFrameskip-v4",
                  "SeaquestNoFrameskip-v0"]  # , "SeaquestNoFrameskip-v4"]
-
 
     cur_idx = 0
     num_train = 0
@@ -26,10 +23,9 @@ if __name__ == '__main__':
     for env_name in env_names:
         for attn_target in AttentionTarget:
             for attn_type in AttentionType:
-                if (attn_target == AttentionTarget.A2C or attn_target == AttentionTarget.ICM_LOSS) and attn_type == AttentionType.DOUBLE_ATTENTION:
+                if (
+                        attn_target == AttentionTarget.A2C or attn_target == AttentionTarget.ICM_LOSS) and attn_type == AttentionType.DOUBLE_ATTENTION:
                     break
-
-
 
                 print(env_name, attn_target, attn_type)
 
@@ -49,7 +45,6 @@ if __name__ == '__main__':
                 if args.train:
                     if cur_idx > args.idx and num_train < args.num_train:
                         """Train"""
-
 
                         # skip if index not achieved
                         num_train += 1
