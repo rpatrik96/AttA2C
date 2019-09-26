@@ -4,8 +4,9 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 
-from utils import make_dir, numpy_ewma_vectorized_v2, print_plot_details
+from utils import make_dir, numpy_ewma_vectorized_v2, print_plot_details, print_init, label_converter, series_indexer
 
 
 class LogData(object):
@@ -176,23 +177,57 @@ class EnvLogger(object):
         plt.title("Proxy for the reward-exploration problem")
         print_plot_details()
 
-    def plot_rewards(self, window=1000, std_scale=1):
+    def plot_rewards(self, window=1000, std_scale=1, inset_start_x=int(2e6), inset_end_x=int(2.5e6), inset_start_y=10,
+                     inset_end_y=15):
+
+        fig, ax, axins = print_init()
 
         for idx, (key, val) in enumerate(self.logs.items()):
-            print(f'key={key}, mean_reward={self.params_df[self.params_df.timestamp == key]["mean_reward"][idx]}')
+            instance = self.params_df[self.params_df.timestamp == key]
+            print(f'key={key}, mean_reward={instance["mean_reward"][idx]}')
+            label = f"{label_converter(series_indexer(instance['attention_target']))}, {label_converter(series_indexer(instance['attention_type']))}"
+
+            # calculate exp mean
             ewma_mean = numpy_ewma_vectorized_v2(val.__dict__["rewards"].mean, window)
             ewma_std = numpy_ewma_vectorized_v2(val.__dict__["rewards"].std, window)
-            plt.plot(ewma_mean, label=key)
-            plt.fill_between(range(len(val.__dict__["rewards"].mean)), ewma_mean + std_scale * ewma_std,
-                             ewma_mean - std_scale * ewma_std, alpha=.2)
 
-        plt.title("Mean rewards for the reward-exploration problem")
-        print_plot_details()
+            # placeholder for the x points (for xtick conversion)
+            x_points = self.decimate_step * np.arange(ewma_mean.shape[0])
+
+            # plot
+            ax.plot(x_points, ewma_mean, label=label)
+            ax.fill_between(x_points, ewma_mean + std_scale * ewma_std,
+                            ewma_mean - std_scale * ewma_std, alpha=.2)
+
+            # inset
+            axins.plot(x_points, ewma_mean, label=label)
+            axins.set_xlim(inset_start_x, inset_end_x)  # apply the x-limits
+            axins.set_ylim(inset_start_y, inset_end_y)  # apply the y-limits
+            mark_inset(ax, axins, loc1=1, loc2=4, fc="none", ec="0.5")
+
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.125),
+                  fancybox=True, shadow=False, ncol=2)
+
+        print_plot_details(ax, "Mean rewards for the reward-exploration problem", ylabel="Mean reward")
 
     def plot_feat_std(self, window=1000):
-        for idx, (key, val) in enumerate(self.logs.items()):
-            print(f'key={key}, feat_std={self.params_df[self.params_df.timestamp == key]["mean_reward"][idx]}')
-            plt.plot(numpy_ewma_vectorized_v2(val.__dict__["features"].std, window), label=key)
+        fig, ax, _ = print_init(False)
 
-        plt.title("Feature standard deviation for the reward-exploration problem")
-        print_plot_details()
+        for idx, (key, val) in enumerate(self.logs.items()):
+            instance = self.params_df[self.params_df.timestamp == key]
+            print(f'key={key}, feat_std={instance["mean_reward"][idx]}')
+            label = f"{label_converter(series_indexer(instance['attention_target']))}, {label_converter(series_indexer(instance['attention_type']))}"
+
+            # calculate exp mean of the std
+            ewma_feat_std = numpy_ewma_vectorized_v2(val.__dict__["features"].std, window)
+
+            # placeholder for the x points (for xtick conversion)
+            x_points = self.decimate_step * np.arange(ewma_feat_std.shape[0])
+
+            # plot
+            ax.plot(x_points, ewma_feat_std, label=label)
+
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.125),
+                  fancybox=True, shadow=False, ncol=2)
+        print_plot_details(ax, "Feature standard deviation for the reward-exploration problem",
+                           ylabel=r"$\sigma_{feature}$")

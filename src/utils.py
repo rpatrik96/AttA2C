@@ -1,6 +1,7 @@
 from enum import Enum
 from os import makedirs, listdir
 from os.path import isdir, isfile, join, dirname, abspath
+from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes, mark_inset
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,11 +26,43 @@ class RewardType(Enum):
     INTRINSIC_ONLY = 1  # currently not used
 
 
-def print_plot_details():
-    plt.xlabel("Rollout")
-    plt.ylabel("Value")
-    plt.legend()
-    plt.show()
+def label_converter(label):
+    label = label[label.find(".")+1:]
+
+    if label == "NONE":
+        label = "Baseline"
+    elif label == "ICM_LOSS":
+        label = "RCM"
+    elif label == "SINGLE_ATTENTION":
+        label = "single attention"
+    elif label == "DOUBLE_ATTENTION":
+        label = "double attention"
+
+    return label
+
+
+def series_indexer(series):
+    return series[series._index[0]]
+
+def print_init(inset=True):
+    fig, ax = plt.subplots(figsize=(8,6))
+    # ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda val, tick_num: int(val*self.decimate_step)))
+    ax.ticklabel_format(axis="x", style="scientific", scilimits=(0, 0), useMathText=False)
+
+
+    if inset:
+        axins = zoomed_inset_axes(ax, zoom=1.75, loc=2, bbox_to_anchor=(0.07, .95),
+                                  bbox_transform=ax.transAxes)  # zoom-factor: 2, location: upper-left
+        axins.ticklabel_format(axis="x", style="scientific", scilimits=(0, 0), useMathText=False)
+    else:
+        axins = None
+
+    return fig, ax, axins
+
+def print_plot_details(ax, title, xlabel="Rollout", ylabel="Value"):
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
 
 
 class HyperparamScheduler(object):
