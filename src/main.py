@@ -13,9 +13,9 @@ if __name__ == '__main__':
     """Argument parsing"""
     args = get_args()
 
-    env_names = ["PongNoFrameskip-v0",  # "PongNoFrameskip-v4",
-                 "BreakoutNoFrameskip-v0",  # "BreakoutNoFrameskip-v4",
-                 "SeaquestNoFrameskip-v0"]  # , "SeaquestNoFrameskip-v4"]
+    env_names = ["PongNoFrameskip-v4",  # "PongNoFrameskip-v4",
+                 "BreakoutNoFrameskip-v4",  # "BreakoutNoFrameskip-v4",
+                 "SeaquestNoFrameskip-v4"]  # , "SeaquestNoFrameskip-v4"]
 
     cur_idx = 0
     num_train = 0

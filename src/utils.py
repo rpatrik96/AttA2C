@@ -44,14 +44,14 @@ def label_converter(label):
 def series_indexer(series):
     return series[series._index[0]]
 
-def print_init(inset=True):
+def print_init(inset=True, zoom=1.75, loc=4, bbox_to_anchor=(0.95, .1)):
     fig, ax = plt.subplots(figsize=(8,6))
     # ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda val, tick_num: int(val*self.decimate_step)))
     ax.ticklabel_format(axis="x", style="scientific", scilimits=(0, 0), useMathText=False)
 
 
     if inset:
-        axins = zoomed_inset_axes(ax, zoom=1.75, loc=2, bbox_to_anchor=(0.07, .95),
+        axins = zoomed_inset_axes(ax, zoom=zoom, loc=loc, bbox_to_anchor=bbox_to_anchor,
                                   bbox_transform=ax.transAxes)  # zoom-factor: 2, location: upper-left
         axins.ticklabel_format(axis="x", style="scientific", scilimits=(0, 0), useMathText=False)
     else:
@@ -224,6 +224,26 @@ class AgentCheckpointer(object):
 
         self.update_cntr += 1
 
+
+from matplotlib import rc
+def plot_typography(usetex=True, small=12, medium=14, big=16):
+    rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+    ## for Palatino and other serif fonts use:
+
+    #rc('font',**{'family':'serif','serif':['Palatino']})
+    rc('text', usetex=usetex)
+    rc('font', family='serif')
+    small = 12
+    medium = 14
+    big = 16
+
+    rc('font', size=small)          # controls default text sizes
+    rc('axes', titlesize=small)     # fontsize of the axes title
+    rc('axes', labelsize=medium)    # fontsize of the x and y labels
+    rc('xtick', labelsize=small)    # fontsize of the tick labels
+    rc('ytick', labelsize=small)    # fontsize of the tick labels
+    rc('legend', fontsize=small)    # legend fontsize
+    rc('figure', titlesize=big)  # fontsize of the figure title
 
 if __name__ == '__main__':
     merge_tables()

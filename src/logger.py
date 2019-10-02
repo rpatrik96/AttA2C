@@ -119,20 +119,25 @@ class TemporalLogger(object):
                     value.load(f[key], decimate_step)
 
     def plot_mean_min_max(self, *args):
+        fig, ax, _ = print_init(False)
         for arg in args:
             # breakpoint()
             if arg in self.__dict__.keys():  # and isinstance(self.__dict__[arg], LogData):
                 self.__dict__[arg].plot_mean_min_max(arg)
         plt.title("Mean and min-max statistics")
-        print_plot_details()
+
+        print_plot_details(ax, f"Mean and min-max statistics of {args}",
+                           ylabel=r"$\mu$")
 
     def plot_mean_std(self, *args):
+        fig, ax, _ = print_init(False)
         for arg in args:
             if arg in self.__dict__.keys():
                 self.__dict__[arg].plot_mean_std(arg)
 
         plt.title("Mean and standard deviation statistics")
-        print_plot_details()
+        print_plot_details(ax, f"Mean and standard deviation statistics of {args}",
+                           ylabel=r"$\mu$")
 
 
 class EnvLogger(object):
@@ -152,13 +157,17 @@ class EnvLogger(object):
         mean_feat_std = []
         mean_proxy = []
 
+        # load trainings
         for timestamp in self.params_df.timestamp:
             self.logs[timestamp] = TemporalLogger(self.env_name, timestamp, self.log_dir, *["rewards", "features"])
             self.logs[timestamp].load(join(self.data_dir, f"time_log_{timestamp}"), self.decimate_step)
+
+            # calculate statistics
             mean_reward.append(self.logs[timestamp].__dict__["rewards"].mean.mean())
             mean_feat_std.append(self.logs[timestamp].__dict__["features"].std.mean())
             mean_proxy.append(mean_reward[-1] * mean_feat_std[-1])
 
+        # append statistics to df
         self.params_df["mean_reward"] = pd.Series(mean_reward, index=self.params_df.index)
         self.params_df["mean_feat_std"] = pd.Series(mean_feat_std, index=self.params_df.index)
         self.params_df["mean_proxy"] = pd.Series(mean_proxy, index=self.params_df.index)
@@ -169,23 +178,41 @@ class EnvLogger(object):
             val.plot_mean_std(*args)
 
     def plot_proxy(self, window=1000):
+        fig, ax, _ = print_init(False)
         for idx, (key, val) in enumerate(self.logs.items()):
             print(f'key={key}, proxy_val={self.params_df[self.params_df.timestamp == key]["mean_proxy"][idx]}')
             plt.plot(numpy_ewma_vectorized_v2(val.__dict__["features"].std, window) * numpy_ewma_vectorized_v2(
                 val.__dict__["rewards"].mean, window), label=key)
 
         plt.title("Proxy for the reward-exploration problem")
-        print_plot_details()
+        print_plot_details(ax, "Proxy value for the reward-exploration problem", ylabel="Proxy")
 
-    def plot_rewards(self, window=1000, std_scale=1, inset_start_x=int(2e6), inset_end_x=int(2.5e6), inset_start_y=10,
-                     inset_end_y=15):
+    def plot_rewards(self, window=1000, std_scale=1, inset_start_x=int(2e6), inset_end_x=int(2.5e6),
+                     y_inset_std_scale=5):
 
         fig, ax, axins = print_init()
 
+        # precompute y inset limits
+        means = []
+        for key, val in self.logs.items():
+            means.append(val.__dict__["rewards"].mean[-1])
+
+        means = np.array(means)
+        y_inset_mean = np.array(means).mean()
+        y_inset_std = y_inset_std_scale * np.array(means).std()
+
+        # plot
         for idx, (key, val) in enumerate(self.logs.items()):
+            # shorthand for the variable
             instance = self.params_df[self.params_df.timestamp == key]
             print(f'key={key}, mean_reward={instance["mean_reward"][idx]}')
+
+            # label generation
             label = f"{label_converter(series_indexer(instance['attention_target']))}, {label_converter(series_indexer(instance['attention_type']))}"
+
+            # remove attention annotation from the baseline
+            if "Baseline" in label:
+                label = "Baseline"
 
             # calculate exp mean
             ewma_mean = numpy_ewma_vectorized_v2(val.__dict__["rewards"].mean, window)
@@ -202,21 +229,34 @@ class EnvLogger(object):
             # inset
             axins.plot(x_points, ewma_mean, label=label)
             axins.set_xlim(inset_start_x, inset_end_x)  # apply the x-limits
-            axins.set_ylim(inset_start_y, inset_end_y)  # apply the y-limits
-            mark_inset(ax, axins, loc1=1, loc2=4, fc="none", ec="0.5")
+            axins.set_ylim(y_inset_mean - y_inset_std, y_inset_mean + y_inset_std)  # apply the y-limits
+            mark_inset(ax, axins, loc1=1, loc2=2, fc="none", ec="0.5")
 
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.125),
                   fancybox=True, shadow=False, ncol=2)
 
         print_plot_details(ax, "Mean rewards for the reward-exploration problem", ylabel="Mean reward")
 
-    def plot_feat_std(self, window=1000):
-        fig, ax, _ = print_init(False)
+    def plot_feat_std(self, window=1000, inset_start_x=int(2e6), inset_end_x=int(2.5e6), y_inset_std_scale=1):
+        fig, ax, axins = print_init(True, zoom=2.75, loc=1, bbox_to_anchor=(0.95, 0.95))
+
+        # precompute y inset limits
+        means = []
+        for key, val in self.logs.items():
+            means.append(val.__dict__["features"].std[-1])
+
+        means = np.array(means)
+        y_inset_mean = np.array(means).mean()
+        y_inset_std = y_inset_std_scale * np.array(means).std()
 
         for idx, (key, val) in enumerate(self.logs.items()):
             instance = self.params_df[self.params_df.timestamp == key]
-            print(f'key={key}, feat_std={instance["mean_reward"][idx]}')
+            print(f'key={key}, feat_std={instance["mean_feat_std"][idx]}')
             label = f"{label_converter(series_indexer(instance['attention_target']))}, {label_converter(series_indexer(instance['attention_type']))}"
+
+            # remove attention annotation from the baseline
+            if "Baseline" in label:
+                label = "Baseline"
 
             # calculate exp mean of the std
             ewma_feat_std = numpy_ewma_vectorized_v2(val.__dict__["features"].std, window)
@@ -226,6 +266,12 @@ class EnvLogger(object):
 
             # plot
             ax.plot(x_points, ewma_feat_std, label=label)
+
+            # inset
+            axins.plot(x_points, ewma_feat_std, label=label)
+            axins.set_xlim(inset_start_x, inset_end_x)  # apply the x-limits
+            axins.set_ylim(y_inset_mean - y_inset_std, y_inset_mean + y_inset_std)  # apply the y-limits
+            mark_inset(ax, axins, loc1=3, loc2=4, fc="none", ec="0.5")
 
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.125),
                   fancybox=True, shadow=False, ncol=2)

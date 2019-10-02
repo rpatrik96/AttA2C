@@ -5,6 +5,7 @@
 /src/__pycache__/
 /jupyter/.ipynb_checkpoints/
 
+agent*
 *.hdf5
 *.npy
 *.pickle
