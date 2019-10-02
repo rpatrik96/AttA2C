@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 
-from utils import make_dir, numpy_ewma_vectorized_v2, print_plot_details, print_init, label_converter, series_indexer
+from utils import make_dir, numpy_ewma_vectorized_v2, plot_postprocess, print_init, label_converter, series_indexer
 
 
 class LogData(object):
@@ -126,8 +126,8 @@ class TemporalLogger(object):
                 self.__dict__[arg].plot_mean_min_max(arg)
         plt.title("Mean and min-max statistics")
 
-        print_plot_details(ax, f"Mean and min-max statistics of {args}",
-                           ylabel=r"$\mu$")
+        plot_postprocess(ax, f"Mean and min-max statistics of {args}",
+                         ylabel=r"$\mu$")
 
     def plot_mean_std(self, *args):
         fig, ax, _ = print_init(False)
@@ -136,8 +136,8 @@ class TemporalLogger(object):
                 self.__dict__[arg].plot_mean_std(arg)
 
         plt.title("Mean and standard deviation statistics")
-        print_plot_details(ax, f"Mean and standard deviation statistics of {args}",
-                           ylabel=r"$\mu$")
+        plot_postprocess(ax, f"Mean and standard deviation statistics of {args}",
+                         ylabel=r"$\mu$")
 
 
 class EnvLogger(object):
@@ -148,6 +148,8 @@ class EnvLogger(object):
         self.log_dir = log_dir
         self.decimate_step = decimate_step
         self.data_dir = join(self.log_dir, self.env_name)
+        self.fig_dir = self.base_dir = join(dirname(dirname(abspath(__file__))), join("figures", self.env_name))
+        make_dir(self.fig_dir)
 
         self.params_df = pd.read_csv(join(self.data_dir, "params.tsv"), "\t")
 
@@ -185,17 +187,18 @@ class EnvLogger(object):
                 val.__dict__["rewards"].mean, window), label=key)
 
         plt.title("Proxy for the reward-exploration problem")
-        print_plot_details(ax, "Proxy value for the reward-exploration problem", ylabel="Proxy")
+        plot_postprocess(fig, ax, "Proxy value for the reward-exploration problem", None, ylabel="Proxy")
 
     def plot_rewards(self, window=1000, std_scale=1, inset_start_x=int(2e6), inset_end_x=int(2.5e6),
-                     y_inset_std_scale=5):
+                     y_inset_std_scale=5, save=False, zoom=2.5, loc=4):
 
-        fig, ax, axins = print_init()
+        fig, ax, axins, loc1, loc2 = print_init(zoom=zoom, loc=loc)
 
         # precompute y inset limits
         means = []
         for key, val in self.logs.items():
-            means.append(val.__dict__["rewards"].mean[-1])
+            ewma_mean = numpy_ewma_vectorized_v2(val.__dict__["rewards"].mean, window)
+            means.append(ewma_mean[-1])
 
         means = np.array(means)
         y_inset_mean = np.array(means).mean()
@@ -205,7 +208,7 @@ class EnvLogger(object):
         for idx, (key, val) in enumerate(self.logs.items()):
             # shorthand for the variable
             instance = self.params_df[self.params_df.timestamp == key]
-            print(f'key={key}, mean_reward={instance["mean_reward"][idx]}')
+            # print(f'key={key}, mean_reward={instance["mean_reward"][idx]}')
 
             # label generation
             label = f"{label_converter(series_indexer(instance['attention_target']))}, {label_converter(series_indexer(instance['attention_type']))}"
@@ -230,28 +233,29 @@ class EnvLogger(object):
             axins.plot(x_points, ewma_mean, label=label)
             axins.set_xlim(inset_start_x, inset_end_x)  # apply the x-limits
             axins.set_ylim(y_inset_mean - y_inset_std, y_inset_mean + y_inset_std)  # apply the y-limits
-            mark_inset(ax, axins, loc1=1, loc2=2, fc="none", ec="0.5")
+            mark_inset(ax, axins, loc1=loc1, loc2=loc2, fc="none", ec="0.5")
 
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.125),
-                  fancybox=True, shadow=False, ncol=2)
+        plot_postprocess(fig, ax, r"$\mu_{reward}$" + f" in {self.env_name}",
+                         join(self.fig_dir, f"mean_reward_{self.env_name}.png"),
+                         ylabel=r"$\mu_{reward}$", save=save)
 
-        print_plot_details(ax, "Mean rewards for the reward-exploration problem", ylabel="Mean reward")
-
-    def plot_feat_std(self, window=1000, inset_start_x=int(2e6), inset_end_x=int(2.5e6), y_inset_std_scale=1):
-        fig, ax, axins = print_init(True, zoom=2.75, loc=1, bbox_to_anchor=(0.95, 0.95))
+    def plot_feat_std(self, window=1000, inset_start_x=int(2e6), inset_end_x=int(2.5e6), y_inset_std_scale=1,
+                      save=False, zoom=2.5, loc=1):
+        fig, ax, axins, loc1, loc2 = print_init(True, zoom=zoom, loc=loc)
 
         # precompute y inset limits
-        means = []
+        stds = []
         for key, val in self.logs.items():
-            means.append(val.__dict__["features"].std[-1])
+            ewma_feat_std = numpy_ewma_vectorized_v2(val.__dict__["features"].std, window)
+            stds.append(ewma_feat_std[-1])
 
-        means = np.array(means)
-        y_inset_mean = np.array(means).mean()
-        y_inset_std = y_inset_std_scale * np.array(means).std()
+        stds = np.array(stds)
+        y_inset_mean = np.array(stds).mean()
+        y_inset_std = y_inset_std_scale * np.array(stds).std()
 
         for idx, (key, val) in enumerate(self.logs.items()):
             instance = self.params_df[self.params_df.timestamp == key]
-            print(f'key={key}, feat_std={instance["mean_feat_std"][idx]}')
+            # print(f'key={key}, feat_std={instance["mean_feat_std"][idx]}')
             label = f"{label_converter(series_indexer(instance['attention_target']))}, {label_converter(series_indexer(instance['attention_type']))}"
 
             # remove attention annotation from the baseline
@@ -271,9 +275,8 @@ class EnvLogger(object):
             axins.plot(x_points, ewma_feat_std, label=label)
             axins.set_xlim(inset_start_x, inset_end_x)  # apply the x-limits
             axins.set_ylim(y_inset_mean - y_inset_std, y_inset_mean + y_inset_std)  # apply the y-limits
-            mark_inset(ax, axins, loc1=3, loc2=4, fc="none", ec="0.5")
+            mark_inset(ax, axins, loc1=loc1, loc2=loc2, fc="none", ec="0.5")
 
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.125),
-                  fancybox=True, shadow=False, ncol=2)
-        print_plot_details(ax, "Feature standard deviation for the reward-exploration problem",
-                           ylabel=r"$\sigma_{feature}$")
+        plot_postprocess(fig, ax, r"$\sigma_{feature}$" + f" in {self.env_name}",
+                         join(self.fig_dir, f"feat_std_{self.env_name}.png"),
+                         ylabel=r"$\sigma_{feature}$", save=save)

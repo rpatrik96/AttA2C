@@ -1,12 +1,12 @@
 from enum import Enum
 from os import makedirs, listdir
 from os.path import isdir, isfile, join, dirname, abspath
-from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes, mark_inset
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
 
 
 class AttentionType(Enum):
@@ -27,7 +27,7 @@ class RewardType(Enum):
 
 
 def label_converter(label):
-    label = label[label.find(".")+1:]
+    label = label[label.find(".") + 1:]
 
     if label == "NONE":
         label = "Baseline"
@@ -44,11 +44,21 @@ def label_converter(label):
 def series_indexer(series):
     return series[series._index[0]]
 
-def print_init(inset=True, zoom=1.75, loc=4, bbox_to_anchor=(0.95, .1)):
-    fig, ax = plt.subplots(figsize=(8,6))
+
+def print_init(inset=True, zoom=2.5, loc=4):
+    fig, ax = plt.subplots(figsize=(8, 6))
     # ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda val, tick_num: int(val*self.decimate_step)))
     ax.ticklabel_format(axis="x", style="scientific", scilimits=(0, 0), useMathText=False)
 
+    if loc == 1:
+        bbox_to_anchor = (0.95, 0.95)
+        loc1, loc2 = 3, 4
+    elif loc == 2:
+        bbox_to_anchor = (0.08, .95)
+        loc1, loc2 = 1, 3
+    elif loc == 4:
+        bbox_to_anchor = (0.95, .1)
+        loc1, loc2 = 1, 2
 
     if inset:
         axins = zoomed_inset_axes(ax, zoom=zoom, loc=loc, bbox_to_anchor=bbox_to_anchor,
@@ -57,12 +67,19 @@ def print_init(inset=True, zoom=1.75, loc=4, bbox_to_anchor=(0.95, .1)):
     else:
         axins = None
 
-    return fig, ax, axins
+    return fig, ax, axins, loc1, loc2
 
-def print_plot_details(ax, title, xlabel="Rollout", ylabel="Value"):
+
+def plot_postprocess(fig, ax, title, path, xlabel="Rollout", ylabel="Value", save=False):
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+
+    legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.125),
+                       fancybox=True, shadow=False, ncol=2)
+
+    if save:
+        fig.savefig(path, bbox_extra_artists=(legend,), bbox_inches='tight')
 
 
 class HyperparamScheduler(object):
@@ -226,24 +243,27 @@ class AgentCheckpointer(object):
 
 
 from matplotlib import rc
+
+
 def plot_typography(usetex=True, small=12, medium=14, big=16):
-    rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+    rc('font', **{'family': 'sans-serif', 'sans-serif': ['Helvetica']})
     ## for Palatino and other serif fonts use:
 
-    #rc('font',**{'family':'serif','serif':['Palatino']})
+    # rc('font',**{'family':'serif','serif':['Palatino']})
     rc('text', usetex=usetex)
     rc('font', family='serif')
     small = 12
     medium = 14
     big = 16
 
-    rc('font', size=small)          # controls default text sizes
-    rc('axes', titlesize=small)     # fontsize of the axes title
-    rc('axes', labelsize=medium)    # fontsize of the x and y labels
-    rc('xtick', labelsize=small)    # fontsize of the tick labels
-    rc('ytick', labelsize=small)    # fontsize of the tick labels
-    rc('legend', fontsize=small)    # legend fontsize
+    rc('font', size=small)  # controls default text sizes
+    rc('axes', titlesize=small)  # fontsize of the axes title
+    rc('axes', labelsize=medium)  # fontsize of the x and y labels
+    rc('xtick', labelsize=small)  # fontsize of the tick labels
+    rc('ytick', labelsize=small)  # fontsize of the tick labels
+    rc('legend', fontsize=small)  # legend fontsize
     rc('figure', titlesize=big)  # fontsize of the figure title
+
 
 if __name__ == '__main__':
     merge_tables()
