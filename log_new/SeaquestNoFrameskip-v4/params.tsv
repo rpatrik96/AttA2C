@@ -2,3 +2,5 @@ env_name	num_envs	n_stack	rollout_size	num_updates	max_grad_norm	icm_beta	value_
 SeaquestNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.NONE	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-26 22_56_06
 SeaquestNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-28 11_47_34
 SeaquestNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.DOUBLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-30 00_24_35
+SeaquestNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.A2C	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-01 13_08_48
+SeaquestNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM_LOSS	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-03 08_20_06
