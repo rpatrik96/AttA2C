@@ -1,17 +1,22 @@
 from stable_baselines.common.cmd_util import make_atari_env
-from stable_baselines.common.vec_env import VecFrameStack
+from stable_baselines.common.vec_env import VecFrameStack, VecEnv
+
+
 
 from agent import ICMAgent
 from args import get_args
 from train import Runner
 # constants
 from utils import AttentionTarget, AttentionType, RewardType
-from utils import load_and_eval, NetworkParameters
+from utils import load_and_eval, NetworkParameters, set_random_seeds
 
 if __name__ == '__main__':
 
     """Argument parsing"""
     args = get_args()
+
+    set_random_seeds(args.seed)
+
 
     env_names = ["PongNoFrameskip-v4",  # "PongNoFrameskip-v4",
                  "BreakoutNoFrameskip-v4",  # "BreakoutNoFrameskip-v4",
@@ -37,6 +42,8 @@ if __name__ == '__main__':
                 # NOTE: this wrapper automatically resets each env if the episode is done
                 env = make_atari_env(env_name, num_env=args.num_envs, seed=args.seed)
                 env = VecFrameStack(env, n_stack=args.n_stack)
+
+                # env = set_env_seed(env, args.seed)
 
                 """Agent"""
                 agent = ICMAgent(args.n_stack, args.num_envs, env.action_space.n, attn_target, attn_type,

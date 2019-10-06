@@ -1,3 +1,5 @@
+import os
+import random
 from enum import Enum
 from os import makedirs, listdir
 from os.path import isdir, isfile, join, dirname, abspath
@@ -7,6 +9,7 @@ import numpy as np
 import pandas as pd
 import torch
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
+
 
 
 class AttentionType(Enum):
@@ -25,6 +28,45 @@ class RewardType(Enum):
     INTRINSIC_AND_EXTRINSIC = 0
     INTRINSIC_ONLY = 1  # currently not used
 
+
+def set_random_seeds(seed=42):
+    """
+    Courtesy of https://stackoverflow.com/questions/32419510/how-to-get-reproducible-results-in-keras
+    :param seed:
+    :return:
+    """
+    # 0. call stable baselines seed config routine
+    from stable_baselines.common import set_global_seeds
+    set_global_seeds(seed)
+
+    # 1. Set the `PYTHONHASHSEED` environment variable at a fixed value
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+    # 2. Set the `python` built-in pseudo-random generator at a fixed value
+    random.seed(seed)
+
+    # 3. Set the `numpy` pseudo-random generator at a fixed value
+    np.random.seed(seed)
+
+    # 4. Set the `tensorflow` pseudo-random generator at a fixed value
+    import tensorflow as tf
+    tf.compat.v1.set_random_seed(seed)
+
+    # 5. set the PyTorch seed + CUDA backend
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+# def set_env_seed(env, seed):
+#     from stable_baselines.common.vec_env import VecEnv
+#     if isinstance(env, VecEnv):
+#         # Use a different seed for each env
+#         for idx in range(env.num_envs):
+#             print(idx)
+#             env.env_method("seed", seed + idx)
+#     env.action_space.seed(seed)
+#     return env
 
 def label_converter(label):
     label = label[label.find(".") + 1:]
