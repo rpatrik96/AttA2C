@@ -239,7 +239,7 @@ class EnvLogger(object):
             mark_inset(ax, axins, loc1=loc1, loc2=loc2, fc="none", ec="0.5")
 
         plot_postprocess(fig, ax, r"$\mu_{reward}$" + f" in {self.env_name}",
-                         join(self.fig_dir, f"mean_reward_{self.env_name}.png"),
+                         join(self.fig_dir, f"mean_reward_{self.env_name}.svg"),
                          ylabel=r"$\mu_{reward}$", save=save)
 
     def plot_feat_std(self, window=1000, inset_start_x=int(2e6), inset_end_x=int(2.5e6), y_inset_std_scale=1,
@@ -283,5 +283,5 @@ class EnvLogger(object):
             mark_inset(ax, axins, loc1=loc1, loc2=loc2, fc="none", ec="0.5")
 
         plot_postprocess(fig, ax, r"$\sigma_{feature}$" + f" in {self.env_name}",
-                         join(self.fig_dir, f"feat_std_{self.env_name}.png"),
+                         join(self.fig_dir, f"feat_std_{self.env_name}.svg"),
                          ylabel=r"$\sigma_{feature}$", save=save)

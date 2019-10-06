@@ -10,3 +10,4 @@ agent*
 *.npy
 *.pickle
 *.png
+*.svg
