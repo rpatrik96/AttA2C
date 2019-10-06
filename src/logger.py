@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 
-from utils import make_dir, numpy_ewma_vectorized_v2, plot_postprocess, print_init, label_converter, series_indexer
+from utils import make_dir, numpy_ewma_vectorized_v2, plot_postprocess, print_init, label_converter, series_indexer, \
+    color4label
 
 
 class LogData(object):
@@ -201,8 +202,8 @@ class EnvLogger(object):
             means.append(ewma_mean[-1])
 
         means = np.array(means)
-        y_inset_mean = np.array(means).mean()
-        y_inset_std = y_inset_std_scale * np.array(means).std()
+        y_inset_mean = np.median(means)
+        y_inset_std = y_inset_std_scale * means.std()
 
         # plot
         for idx, (key, val) in enumerate(self.logs.items()):
@@ -216,6 +217,8 @@ class EnvLogger(object):
             # remove attention annotation from the baseline
             if "Baseline" in label:
                 label = "Baseline"
+            elif "RCM" in label:
+                label = "RCM"
 
             # calculate exp mean
             ewma_mean = numpy_ewma_vectorized_v2(val.__dict__["rewards"].mean, window)
@@ -225,12 +228,12 @@ class EnvLogger(object):
             x_points = self.decimate_step * np.arange(ewma_mean.shape[0])
 
             # plot
-            ax.plot(x_points, ewma_mean, label=label)
+            ax.plot(x_points, ewma_mean, label=label, color=color4label(label))
             ax.fill_between(x_points, ewma_mean + std_scale * ewma_std,
                             ewma_mean - std_scale * ewma_std, alpha=.2)
 
             # inset
-            axins.plot(x_points, ewma_mean, label=label)
+            axins.plot(x_points, ewma_mean, label=label, color=color4label(label))
             axins.set_xlim(inset_start_x, inset_end_x)  # apply the x-limits
             axins.set_ylim(y_inset_mean - y_inset_std, y_inset_mean + y_inset_std)  # apply the y-limits
             mark_inset(ax, axins, loc1=loc1, loc2=loc2, fc="none", ec="0.5")
@@ -250,8 +253,8 @@ class EnvLogger(object):
             stds.append(ewma_feat_std[-1])
 
         stds = np.array(stds)
-        y_inset_mean = np.array(stds).mean()
-        y_inset_std = y_inset_std_scale * np.array(stds).std()
+        y_inset_mean = np.median(stds)
+        y_inset_std = y_inset_std_scale * stds.std()
 
         for idx, (key, val) in enumerate(self.logs.items()):
             instance = self.params_df[self.params_df.timestamp == key]
@@ -261,6 +264,8 @@ class EnvLogger(object):
             # remove attention annotation from the baseline
             if "Baseline" in label:
                 label = "Baseline"
+            elif "RCM" in label:
+                label = "RCM"
 
             # calculate exp mean of the std
             ewma_feat_std = numpy_ewma_vectorized_v2(val.__dict__["features"].std, window)
@@ -269,10 +274,10 @@ class EnvLogger(object):
             x_points = self.decimate_step * np.arange(ewma_feat_std.shape[0])
 
             # plot
-            ax.plot(x_points, ewma_feat_std, label=label)
+            ax.plot(x_points, ewma_feat_std, label=label, color=color4label(label))
 
             # inset
-            axins.plot(x_points, ewma_feat_std, label=label)
+            axins.plot(x_points, ewma_feat_std, label=label, color=color4label(label))
             axins.set_xlim(inset_start_x, inset_end_x)  # apply the x-limits
             axins.set_ylim(y_inset_mean - y_inset_std, y_inset_mean + y_inset_std)  # apply the y-limits
             mark_inset(ax, axins, loc1=loc1, loc2=loc2, fc="none", ec="0.5")

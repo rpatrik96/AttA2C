@@ -41,6 +41,21 @@ def label_converter(label):
     return label
 
 
+def color4label(label):
+    if label == "Baseline":
+        color = "tab:blue"
+    elif label == "A2C, single attention":
+        color = "tab:purple"
+    elif label == "ICM, single attention":
+        color = "tab:red"
+    elif label == "ICM, double attention":
+        color = "tab:green"
+    elif label == "RCM":
+        color = "tab:orange"
+
+    return color
+
+
 def series_indexer(series):
     return series[series._index[0]]
 
@@ -58,7 +73,7 @@ def print_init(inset=True, zoom=2.5, loc=4):
         loc1, loc2 = 1, 3
     elif loc == 4:
         bbox_to_anchor = (0.95, .1)
-        loc1, loc2 = 1, 2
+        loc1, loc2 = 2, 4
 
     if inset:
         axins = zoomed_inset_axes(ax, zoom=zoom, loc=loc, bbox_to_anchor=bbox_to_anchor,
@@ -75,8 +90,14 @@ def plot_postprocess(fig, ax, title, path, xlabel="Rollout", ylabel="Value", sav
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
-    legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.125),
+    handles, labels = ax.get_legend_handles_labels()
+    # sort both labels and handles by labels
+    labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
+    legend = ax.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, -0.125),
                        fancybox=True, shadow=False, ncol=2)
+
+    # legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.125),
+    #                    fancybox=True, shadow=False, ncol=2)
 
     if save:
         fig.savefig(path, bbox_extra_artists=(legend,), bbox_inches='tight')
