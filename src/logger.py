@@ -230,7 +230,7 @@ class EnvLogger(object):
             # plot
             ax.plot(x_points, ewma_mean, label=label, color=color4label(label))
             ax.fill_between(x_points, ewma_mean + std_scale * ewma_std,
-                            ewma_mean - std_scale * ewma_std, alpha=.2)
+                            ewma_mean - std_scale * ewma_std, alpha=.2, color=color4label(label))
 
             # inset
             axins.plot(x_points, ewma_mean, label=label, color=color4label(label))

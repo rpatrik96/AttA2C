@@ -1,2 +1,0 @@
-attention_target	attention_type	cntr	end_val	entropy_coeff	env_name	icm_beta	init_val	max_grad_norm	n_stack	num_envs	num_updates	reward_type	rollout_size	tau	threshold	timestamp	value	value_coeff
-AttentionTarget.ICM	AttentionType.DOUBLE_ATTENTION	2500000	0.0	0.02	BreakoutNoFrameskip-v0	0.2	0.02	0.5	4	4	2500000	RewardType.INTRINSIC_AND_EXTRINSIC	5	1e-06	1e-05	2019-09-09 22_18_05	0.0	0.5
