@@ -11,7 +11,6 @@ import torch
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
 
 
-
 class AttentionType(Enum):
     SINGLE_ATTENTION = 0
     DOUBLE_ATTENTION = 1
@@ -86,7 +85,7 @@ def label_converter(label):
 def color4label(label):
     if label == "Baseline":
         color = "tab:blue"
-    elif label == "A2C, single attention":
+    elif label == "AttA2C":
         color = "tab:purple"
     elif label == "ICM, single attention":
         color = "tab:red"
@@ -127,10 +126,21 @@ def print_init(inset=True, zoom=2.5, loc=4):
     return fig, ax, axins, loc1, loc2
 
 
-def plot_postprocess(fig, ax, title, path, xlabel="Rollout", ylabel="Value", save=False):
+def plot_postprocess(fig, ax, keyword, env, dir, xlabel="Rollout", save=False):
+    # assemble notation
+    if keyword == "rewards":
+        stat_descriptor = r"$\mu_{reward}$"
+        file_prefix = "mean_reward"
+    elif keyword == "features":
+        stat_descriptor = r"$\sigma_{feature}$"
+        file_prefix = "feat_std"
+
+    title = stat_descriptor + f" in {env}"
+
+    # set plot descriptors
     ax.set_title(title)
     ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
+    ax.set_ylabel(stat_descriptor)
 
     handles, labels = ax.get_legend_handles_labels()
     # sort both labels and handles by labels
@@ -142,7 +152,8 @@ def plot_postprocess(fig, ax, title, path, xlabel="Rollout", ylabel="Value", sav
     #                    fancybox=True, shadow=False, ncol=2)
 
     if save:
-        fig.savefig(path, bbox_extra_artists=(legend,), bbox_inches='tight', format="svg", transparent=True)
+        fig.savefig(join(dir, f"{file_prefix}_{env}.svg"), bbox_extra_artists=(legend,), bbox_inches='tight',
+                    format="svg", transparent=True)
 
 
 class HyperparamScheduler(object):

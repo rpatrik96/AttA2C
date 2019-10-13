@@ -188,22 +188,32 @@ class EnvLogger(object):
                 val.__dict__["rewards"].mean, window), label=key)
 
         plt.title("Proxy for the reward-exploration problem")
-        plot_postprocess(fig, ax, "Proxy value for the reward-exploration problem", None, ylabel="Proxy")
+        plot_postprocess(fig, ax, "Proxy", " value for the reward-exploration problem", None)
 
-    def plot_rewards(self, window=1000, std_scale=1, inset_start_x=int(2e6), inset_end_x=int(2.5e6),
-                     y_inset_std_scale=5, save=False, zoom=2.5, loc=4):
+    def plot_decorator(self, keyword="rewards", window=1000, std_scale=1, inset_start_x=int(2e6),
+                       inset_end_x=int(2.5e6),
+                       y_inset_std_scale=5, save=False, zoom=2.5, loc=4):
+
+        def stat_ewma(val, keyword, window):
+            feat = val.__dict__[keyword]
+            if keyword == "rewards":
+                feat_stat = feat.mean
+            elif keyword == "features":
+                feat_stat = feat.std
+
+            return numpy_ewma_vectorized_v2(feat_stat, window)
 
         fig, ax, axins, loc1, loc2 = print_init(zoom=zoom, loc=loc)
 
         # precompute y inset limits
-        means = []
-        for key, val in self.logs.items():
-            ewma_mean = numpy_ewma_vectorized_v2(val.__dict__["rewards"].mean, window)
-            means.append(ewma_mean[-1])
+        stats = []
+        for val in self.logs.values():
+            ewma_stat = stat_ewma(val, keyword, window)
+            stats.append(ewma_stat[-1])
 
-        means = np.array(means)
-        y_inset_mean = np.median(means)
-        y_inset_std = y_inset_std_scale * means.std()
+        stats = np.array(stats)
+        y_inset_mean = np.median(stats)
+        y_inset_std = y_inset_std_scale * stats.std()
 
         # plot
         for idx, (key, val) in enumerate(self.logs.items()):
@@ -219,69 +229,25 @@ class EnvLogger(object):
                 label = "Baseline"
             elif "RCM" in label:
                 label = "RCM"
+            elif "A2C" in label:
+                label = "AttA2C"
 
-            # calculate exp mean
-            ewma_mean = numpy_ewma_vectorized_v2(val.__dict__["rewards"].mean, window)
-            ewma_std = numpy_ewma_vectorized_v2(val.__dict__["rewards"].std, window)
+            # plot the mean of the feature
+            ewma_stat = stat_ewma(val, keyword, window)  # calculate exp mean
+            x_points = self.decimate_step * np.arange(
+                ewma_stat.shape[0])  # placeholder for the x points (for xtick conversion)
+            ax.plot(x_points, ewma_stat, label=label, color=color4label(label))
 
-            # placeholder for the x points (for xtick conversion)
-            x_points = self.decimate_step * np.arange(ewma_mean.shape[0])
-
-            # plot
-            ax.plot(x_points, ewma_mean, label=label, color=color4label(label))
-            ax.fill_between(x_points, ewma_mean + std_scale * ewma_std,
-                            ewma_mean - std_scale * ewma_std, alpha=.2, color=color4label(label))
+            if keyword == "rewards":
+                # plot standard deviation (uncertainty)
+                ewma_std = numpy_ewma_vectorized_v2(val.__dict__[keyword].std, window)
+                ax.fill_between(x_points, ewma_stat + std_scale * ewma_std,
+                                ewma_stat - std_scale * ewma_std, alpha=.2, color=color4label(label))
 
             # inset
-            axins.plot(x_points, ewma_mean, label=label, color=color4label(label))
+            axins.plot(x_points, ewma_stat, label=label, color=color4label(label))
             axins.set_xlim(inset_start_x, inset_end_x)  # apply the x-limits
             axins.set_ylim(y_inset_mean - y_inset_std, y_inset_mean + y_inset_std)  # apply the y-limits
             mark_inset(ax, axins, loc1=loc1, loc2=loc2, fc="none", ec="0.5")
 
-        plot_postprocess(fig, ax, r"$\mu_{reward}$" + f" in {self.env_name}",
-                         join(self.fig_dir, f"mean_reward_{self.env_name}.svg"),
-                         ylabel=r"$\mu_{reward}$", save=save)
-
-    def plot_feat_std(self, window=1000, inset_start_x=int(2e6), inset_end_x=int(2.5e6), y_inset_std_scale=1,
-                      save=False, zoom=2.5, loc=1):
-        fig, ax, axins, loc1, loc2 = print_init(True, zoom=zoom, loc=loc)
-
-        # precompute y inset limits
-        stds = []
-        for key, val in self.logs.items():
-            ewma_feat_std = numpy_ewma_vectorized_v2(val.__dict__["features"].std, window)
-            stds.append(ewma_feat_std[-1])
-
-        stds = np.array(stds)
-        y_inset_mean = np.median(stds)
-        y_inset_std = y_inset_std_scale * stds.std()
-
-        for idx, (key, val) in enumerate(self.logs.items()):
-            instance = self.params_df[self.params_df.timestamp == key]
-            # print(f'key={key}, feat_std={instance["mean_feat_std"][idx]}')
-            label = f"{label_converter(series_indexer(instance['attention_target']))}, {label_converter(series_indexer(instance['attention_type']))}"
-
-            # remove attention annotation from the baseline
-            if "Baseline" in label:
-                label = "Baseline"
-            elif "RCM" in label:
-                label = "RCM"
-
-            # calculate exp mean of the std
-            ewma_feat_std = numpy_ewma_vectorized_v2(val.__dict__["features"].std, window)
-
-            # placeholder for the x points (for xtick conversion)
-            x_points = self.decimate_step * np.arange(ewma_feat_std.shape[0])
-
-            # plot
-            ax.plot(x_points, ewma_feat_std, label=label, color=color4label(label))
-
-            # inset
-            axins.plot(x_points, ewma_feat_std, label=label, color=color4label(label))
-            axins.set_xlim(inset_start_x, inset_end_x)  # apply the x-limits
-            axins.set_ylim(y_inset_mean - y_inset_std, y_inset_mean + y_inset_std)  # apply the y-limits
-            mark_inset(ax, axins, loc1=loc1, loc2=loc2, fc="none", ec="0.5")
-
-        plot_postprocess(fig, ax, r"$\sigma_{feature}$" + f" in {self.env_name}",
-                         join(self.fig_dir, f"feat_std_{self.env_name}.svg"),
-                         ylabel=r"$\sigma_{feature}$", save=save)
+        plot_postprocess(fig, ax, keyword, self.env_name, self.fig_dir, save=save)
