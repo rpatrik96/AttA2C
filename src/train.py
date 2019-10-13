@@ -8,6 +8,8 @@ import torch.nn as nn
 from logger import TemporalLogger
 from storage import RolloutStorage
 
+from utils import AgentCheckpointer
+
 
 class Runner(object):
 
@@ -24,6 +26,7 @@ class Runner(object):
 
         """Logger"""
         self.logger = TemporalLogger(self.params.env_name, self.timestamp, log_dir, *["rewards", "features"])
+        self.checkpointer = AgentCheckpointer(self.params.env_name, self.params.num_updates, self.timestamp)
 
         """Environment"""
         self.env = env
@@ -42,7 +45,6 @@ class Runner(object):
         """Environment reset"""
         obs = self.env.reset()
         self.storage.states[0].copy_(self.storage.obs2tensor(obs))
-        best_loss = np.inf
 
         for num_update in range(self.params.num_updates):
 
@@ -82,10 +84,8 @@ class Runner(object):
             # grow out of memory, so it is crucial to reset
             self.storage.after_update()
 
-            # if loss < best_loss:
-            #     best_loss = loss.item()
-            #     print("model saved with best loss: ", best_loss, " at update #", num_update)
-            #     torch.save(self.net.state_dict(), "a2c_best_loss_no_norm")
+            if len(self.storage.episode_rewards) > 1:
+                self.checkpointer.checkpoint(loss, self.storage.episode_rewards, self.net)
 
             if num_update % 1000 == 0:
                 print("current loss: ", loss.item(), " at update #", num_update)
