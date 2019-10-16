@@ -216,6 +216,7 @@ class EnvLogger(object):
         y_inset_std = y_inset_std_scale * stats.std()
 
         # plot
+        print("---------------------------------------------------")
         for idx, (key, val) in enumerate(self.logs.items()):
             # shorthand for the variable
             instance = self.params_df[self.params_df.timestamp == key]
@@ -223,6 +224,7 @@ class EnvLogger(object):
 
             # label generation
             label = f"{label_converter(series_indexer(instance['attention_target']))}, {label_converter(series_indexer(instance['attention_type']))}"
+
 
             # remove attention annotation from the baseline
             if "Baseline" in label:
@@ -234,6 +236,7 @@ class EnvLogger(object):
 
             # plot the mean of the feature
             ewma_stat = stat_ewma(val, keyword, window)  # calculate exp mean
+            print(f'{label}, {keyword}, {ewma_stat.max()}')
             x_points = self.decimate_step * np.arange(
                 ewma_stat.shape[0])  # placeholder for the x points (for xtick conversion)
             ax.plot(x_points, ewma_stat, label=label, color=color4label(label))
