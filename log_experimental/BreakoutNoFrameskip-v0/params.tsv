@@ -3,3 +3,4 @@ BreakoutNoFrameskip-v0	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.A2C	Attent
 BreakoutNoFrameskip-v0	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.NONE	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-09 10_03_26
 BreakoutNoFrameskip-v0	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-10 22_55_39
 BreakoutNoFrameskip-v0	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.DOUBLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-12 12_07_53
+BreakoutNoFrameskip-v0	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM_LOSS	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-16 03_50_39

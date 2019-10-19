@@ -206,14 +206,22 @@ class EnvLogger(object):
         fig, ax, axins, loc1, loc2 = print_init(zoom=zoom, loc=loc)
 
         # precompute y inset limits
-        stats = []
+        stats_last = []
+        stats_max = []
         for val in self.logs.values():
             ewma_stat = stat_ewma(val, keyword, window)
-            stats.append(ewma_stat[-1])
+            stats_last.append(ewma_stat[-1])
+            stats_max.append(ewma_stat.max())
 
-        stats = np.array(stats)
-        y_inset_mean = np.median(stats)
-        y_inset_std = y_inset_std_scale * stats.std()
+        stats_max = np.array(stats_max)
+        stats_last = np.array(stats_last)
+        y_inset_mean = np.median(stats_last)
+        y_inset_std = y_inset_std_scale * stats_last.std()
+
+
+        # create data structure for storing proxy values
+        perf_metrics = {}
+
 
         # plot
         print("---------------------------------------------------")
@@ -235,8 +243,10 @@ class EnvLogger(object):
                 label = "AttA2C"
 
             # plot the mean of the feature
+            # breakpoint()
             ewma_stat = stat_ewma(val, keyword, window)  # calculate exp mean
-            print(f'{label}, {keyword}, {ewma_stat.max()}')
+            print(f'{label}, {keyword}, {ewma_stat.max()}, {ewma_stat.max()/stats_max.max()}')
+            perf_metrics[label] = ewma_stat.max()/stats_max.max()
             x_points = self.decimate_step * np.arange(
                 ewma_stat.shape[0])  # placeholder for the x points (for xtick conversion)
             ax.plot(x_points, ewma_stat, label=label, color=color4label(label))
@@ -254,3 +264,8 @@ class EnvLogger(object):
             mark_inset(ax, axins, loc1=loc1, loc2=loc2, fc="none", ec="0.5")
 
         plot_postprocess(fig, ax, keyword, self.env_name, self.fig_dir, save=save)
+
+        # from collections import OrderedDict
+        # x = OrderedDict()
+        # breakpoint()
+        return perf_metrics
