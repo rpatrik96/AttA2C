@@ -246,7 +246,7 @@ class EnvLogger(object):
             # breakpoint()
             ewma_stat = stat_ewma(val, keyword, window)  # calculate exp mean
             print(f'{label}, {keyword}, {ewma_stat.max()}, {ewma_stat.max()/stats_max.max()}')
-            perf_metrics[label] = ewma_stat.max()/stats_max.max()
+            perf_metrics[label] = 100*ewma_stat.max()/stats_max.max()
             x_points = self.decimate_step * np.arange(
                 ewma_stat.shape[0])  # placeholder for the x points (for xtick conversion)
             ax.plot(x_points, ewma_stat, label=label, color=color4label(label))
