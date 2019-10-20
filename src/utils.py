@@ -154,6 +154,8 @@ def plot_postprocess(fig, ax, keyword, env, dir, xlabel="Rollout", save=False):
     if save:
         fig.savefig(join(dir, f"{file_prefix}_{env}.svg"), bbox_extra_artists=(legend,), bbox_inches='tight',
                     format="svg", transparent=True)
+        fig.savefig(join(dir, f"{file_prefix}_{env}.png"), bbox_extra_artists=(legend,), bbox_inches='tight',
+                    format="png", transparent=True)
 
 
 class HyperparamScheduler(object):

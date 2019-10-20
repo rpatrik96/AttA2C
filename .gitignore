@@ -9,5 +9,4 @@ agent*
 *.hdf5
 *.npy
 *.pickle
-*.png
 *.svg
