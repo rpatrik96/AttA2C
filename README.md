@@ -3,7 +3,7 @@
 #### Supervisor and Co-author: Márton Szemenyei, lecturer
 #### Organization: Budapest University of Technology and Economics, Department of Control Engineering and Information Technology
 
-Supplementary material for the paper _Attention-based Curiosity-driven Exploration in Deep Reinforcement Learning_ submitted to ICASSP 2020.
+Supplementary material for the paper _Attention-based Curiosity-driven Exploration in Deep Reinforcement Learning_ submitted to ICASSP 2020. Preprint available at [https://arxiv.org/abs/1910.10840](https://arxiv.org/abs/1910.10840).
 
 ## Table of contents
 * [General](#general)
