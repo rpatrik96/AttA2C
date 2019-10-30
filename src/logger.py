@@ -1,13 +1,18 @@
 from os.path import abspath, dirname, join
 
 import h5py
+import imageio
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import torch
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
+from stable_baselines.common.cmd_util import make_atari_env
+from stable_baselines.common.vec_env import VecFrameStack
 
-from utils import make_dir, numpy_ewma_vectorized_v2, plot_postprocess, print_init, label_converter, series_indexer, \
-    color4label
+from agent import ICMAgent
+from utils import make_dir, numpy_ewma_vectorized_v2, plot_postprocess, print_init, series_indexer, \
+    color4label, label_enum_converter, instance2label
 
 
 class LogData(object):
@@ -127,9 +132,6 @@ class TemporalLogger(object):
                 self.__dict__[arg].plot_mean_min_max(arg)
         plt.title("Mean and min-max statistics")
 
-        plot_postprocess(ax, f"Mean and min-max statistics of {args}",
-                         ylabel=r"$\mu$")
-
     def plot_mean_std(self, *args):
         fig, ax, _ = print_init(False)
         for arg in args:
@@ -137,8 +139,6 @@ class TemporalLogger(object):
                 self.__dict__[arg].plot_mean_std(arg)
 
         plt.title("Mean and standard deviation statistics")
-        plot_postprocess(ax, f"Mean and standard deviation statistics of {args}",
-                         ylabel=r"$\mu$")
 
 
 class EnvLogger(object):
@@ -218,10 +218,8 @@ class EnvLogger(object):
         y_inset_mean = np.median(stats_last)
         y_inset_std = y_inset_std_scale * stats_last.std()
 
-
         # create data structure for storing proxy values
         perf_metrics = {}
-
 
         # plot
         print("---------------------------------------------------")
@@ -230,23 +228,13 @@ class EnvLogger(object):
             instance = self.params_df[self.params_df.timestamp == key]
             # print(f'key={key}, mean_reward={instance["mean_reward"][idx]}')
 
-            # label generation
-            label = f"{label_converter(series_indexer(instance['attention_target']))}, {label_converter(series_indexer(instance['attention_type']))}"
-
-
-            # remove attention annotation from the baseline
-            if "Baseline" in label:
-                label = "Baseline"
-            elif "RCM" in label:
-                label = "RCM"
-            elif "A2C" in label:
-                label = "AttA2C"
+            label = instance2label(instance)
 
             # plot the mean of the feature
             # breakpoint()
             ewma_stat = stat_ewma(val, keyword, window)  # calculate exp mean
-            print(f'{label}, {keyword}, {ewma_stat.max()}, {ewma_stat.max()/stats_max.max()}')
-            perf_metrics[label] = 100*ewma_stat.max()/stats_max.max()
+            print(f'{label}, {keyword}, {ewma_stat.max()}, {ewma_stat.max() / stats_max.max()}')
+            perf_metrics[label] = 100 * ewma_stat.max() / stats_max.max()
             x_points = self.decimate_step * np.arange(
                 ewma_stat.shape[0])  # placeholder for the x points (for xtick conversion)
             ax.plot(x_points, ewma_stat, label=label, color=color4label(label))
@@ -265,7 +253,74 @@ class EnvLogger(object):
 
         plot_postprocess(fig, ax, keyword, self.env_name, self.fig_dir, save=save)
 
-        # from collections import OrderedDict
-        # x = OrderedDict()
-        # breakpoint()
         return perf_metrics
+
+
+class Renderer(object):
+
+    def __init__(self, env, variant, log_dir) -> None:
+        super().__init__()
+        # sanity check
+        if variant not in [0, 4]:
+            raise ValueError(f"Invalid variant, got {variant}, should be 0 or 4")
+        self.env_name = f"{env.capitalize()}NoFrameskip-v{variant}"
+        self.log_dir = log_dir
+        self.data_dir = join(self.log_dir, self.env_name)
+        self.render_dir = join(dirname(dirname(abspath(__file__))), join("gifs", self.env_name))
+        make_dir(self.render_dir)
+
+        self.params_df = pd.read_csv(join(self.data_dir, "params.tsv"), "\t")
+
+    def render(self, steps=2500, seed=42):
+        for timestamp in self.params_df.timestamp:
+            # query parameters
+            instance = self.params_df[self.params_df.timestamp == timestamp]
+            print(instance["n_stack"])
+            n_stack = series_indexer(instance["n_stack"])
+
+            attn_target_enum = label_enum_converter(series_indexer(instance['attention_target']))
+            attn_type_enum = label_enum_converter(series_indexer(instance['attention_type']))
+
+            # filenames for loading
+            log_points = (.25, .5, .75, .99)
+            files2load = [f"agent_best_loss_{timestamp}", f"agent_best_reward_{timestamp}",
+                          *[f"agent_step_{i}_{timestamp}" for i in log_points]]
+
+            # name conversion for GIF save
+            label = instance2label(instance)
+            gif_name = label.lower()
+            gif_name = gif_name.replace(", ", "_")
+            gif_name = gif_name.replace(" ", "_")
+            files2save = [f"{gif_name}_best_loss", f"{gif_name}_best_reward",
+                          *[f"{gif_name}_step_{i}" for i in log_points]]
+
+            # iterate and render
+            for agent_name, gif_name in zip(files2load, files2save):
+                # make environment
+                env = make_atari_env(self.env_name, num_env=1, seed=seed)
+                env = VecFrameStack(env, n_stack=n_stack)
+
+                # create agent
+                print(agent_name, gif_name)
+                agent = ICMAgent(n_stack, 1, env.action_space.n, attn_target_enum, attn_type_enum)
+
+                self.load_and_eval(agent, env, agent_name, gif_name, steps)
+
+    def load_and_eval(self, agent: ICMAgent, env, agent_path, gif_path, steps=2500):
+        # load agent and set to evaluation mode
+        agent.load_state_dict(torch.load(join(self.data_dir, agent_path)))
+        agent.eval()
+
+        # loop and acquire images
+        images = []
+        obs = env.reset()
+        for _ in range(steps):
+            tensor = torch.from_numpy(obs.transpose((0, 3, 1, 2))).float() / 255.
+            tensor = tensor.cuda() if torch.cuda.is_available() else tensor
+            action, _, _, _, _ = agent.a2c.get_action(tensor)
+            _, _, _, _ = env.step(action)
+            images.append(env.render(mode="rgb_array"))
+
+        # render
+        imageio.mimsave(join(self.render_dir, f"{gif_path}.gif"),
+                        [np.array(img) for i, img in enumerate(images) if i % 2 == 0], fps=29)

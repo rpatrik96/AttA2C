@@ -4,6 +4,7 @@ from enum import Enum
 from os import makedirs, listdir
 from os.path import isdir, isfile, join, dirname, abspath
 
+import imageio
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -78,6 +79,36 @@ def label_converter(label):
         label = "single attention"
     elif label == "DOUBLE_ATTENTION":
         label = "double attention"
+
+    return label
+
+def instance2label(instance):
+    # label generation
+    label = f"{label_converter(series_indexer(instance['attention_target']))}, {label_converter(series_indexer(instance['attention_type']))}"
+    # remove attention annotation from the baseline
+    if "Baseline" in label:
+        label = "Baseline"
+    elif "RCM" in label:
+        label = "RCM"
+    elif "A2C" in label:
+        label = "AttA2C"
+    return label
+
+
+
+def label_enum_converter(label):
+    label = label[label.find(".") + 1:]
+
+    if label == "NONE":
+        label = AttentionTarget.NONE
+    elif label == "ICM_LOSS":
+        label = AttentionTarget.ICM_LOSS
+    elif label == "SINGLE_ATTENTION":
+        label = AttentionType.SINGLE_ATTENTION
+    elif label == "DOUBLE_ATTENTION":
+        label = AttentionType.DOUBLE_ATTENTION
+    elif label == "A2C":
+        label = AttentionTarget.A2C
 
     return label
 
@@ -226,17 +257,20 @@ def make_dir(dirname):
         makedirs(dirname)
 
 
-def load_and_eval(agent, env):
+def load_and_eval(agent, env, steps=2500):
     agent.load_state_dict(torch.load("best_agent"))
     agent.eval()
 
+    images = []
     obs = env.reset()
-    for i in range(1000):
+    for _ in range(steps):
         tensor = torch.from_numpy(obs.transpose((0, 3, 1, 2))).float() / 255.
         tensor = tensor.cuda() if torch.cuda.is_available() else tensor
         action, _, _, _, _ = agent.a2c.get_action(tensor)
-        obs, rewards, dones, info = env.step(action)
-        env.render()
+        _, _, _, _ = env.step(action)
+        images.append(env.render(mode="rgb_array"))
+
+    imageio.mimsave('lander_a2c.gif', [np.array(img) for i, img in enumerate(images) if i % 2 == 0], fps=29)
 
 
 def merge_tables():
@@ -328,9 +362,7 @@ def plot_typography(usetex=True, small=12, medium=14, big=16):
     # rc('font',**{'family':'serif','serif':['Palatino']})
     rc('text', usetex=usetex)
     rc('font', family='serif')
-    small = 12
-    medium = 14
-    big = 16
+
 
     rc('font', size=small)  # controls default text sizes
     rc('axes', titlesize=small)  # fontsize of the axes title

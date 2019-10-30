@@ -10,7 +10,7 @@ def get_args():
     parser = argparse.ArgumentParser(description='Curiosity-driven deep RL with A2C+ICM')
 
     # training
-    parser.add_argument('--train', action='store_true', default=True,
+    parser.add_argument('--train', action='store_true', default=False,
                         help='train flag (False->load model)')
     parser.add_argument('--cuda', action='store_true', default=True,
                         help='CUDA flag')
@@ -38,6 +38,14 @@ def get_args():
                         help='rollout size')
     parser.add_argument('--num-updates', type=int, default=2500000, metavar='NUM_UPDATES',
                         help='number of updates')
+
+    # render
+    parser.add_argument('--variant', type=int, default=0, metavar='VARIANT',
+                        help='variant of the environment')
+    parser.add_argument('--env', type=str, default="pong", metavar='ENV',
+                        help='environment name')
+    parser.add_argument('--num-frames', type=int, default=200, metavar='N_FRAMES',
+                        help='number of frames')
 
     # model coefficients
     parser.add_argument('--icm-beta', type=float, default=.2, metavar='ICM_BETA',
