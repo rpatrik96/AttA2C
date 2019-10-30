@@ -275,7 +275,6 @@ class Renderer(object):
         for timestamp in self.params_df.timestamp:
             # query parameters
             instance = self.params_df[self.params_df.timestamp == timestamp]
-            print(instance["n_stack"])
             n_stack = series_indexer(instance["n_stack"])
 
             attn_target_enum = label_enum_converter(series_indexer(instance['attention_target']))
@@ -301,7 +300,6 @@ class Renderer(object):
                 env = VecFrameStack(env, n_stack=n_stack)
 
                 # create agent
-                print(agent_name, gif_name)
                 agent = ICMAgent(n_stack, 1, env.action_space.n, attn_target_enum, attn_type_enum)
 
                 self.load_and_eval(agent, env, agent_name, gif_name, steps)
