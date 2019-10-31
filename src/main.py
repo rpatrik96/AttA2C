@@ -3,7 +3,7 @@ from stable_baselines.common.vec_env import VecFrameStack
 
 from agent import ICMAgent
 from args import get_args
-from logger import Renderer
+from renderer import Renderer
 from train import Runner
 # constants
 from utils import AttentionTarget, AttentionType, RewardType
