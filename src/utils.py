@@ -58,15 +58,6 @@ def set_random_seeds(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-# def set_env_seed(env, seed):
-#     from stable_baselines.common.vec_env import VecEnv
-#     if isinstance(env, VecEnv):
-#         # Use a different seed for each env
-#         for idx in range(env.num_envs):
-#             print(idx)
-#             env.env_method("seed", seed + idx)
-#     env.action_space.seed(seed)
-#     return env
 
 def label_converter(label):
     label = label[label.find(".") + 1:]
@@ -371,7 +362,3 @@ def plot_typography(usetex=True, small=12, medium=14, big=16):
     rc('ytick', labelsize=small)  # fontsize of the tick labels
     rc('legend', fontsize=small)  # legend fontsize
     rc('figure', titlesize=big)  # fontsize of the figure title
-
-
-if __name__ == '__main__':
-    merge_tables()
