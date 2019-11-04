@@ -1,6 +1,6 @@
 env_name	num_envs	n_stack	rollout_size	num_updates	max_grad_norm	icm_beta	value_coeff	entropy_coeff	attention_target	attention_type	reward_type	timestamp
-BreakoutNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM_LOSS	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-25 09_45_44
-BreakoutNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.NONE	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-29 11_07_29
-BreakoutNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-09-30 07_15_37
-BreakoutNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.DOUBLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-01 03_20_04
-BreakoutNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.A2C	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-01 23_26_48
+BreakoutNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-28 22_29_53
+BreakoutNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM	AttentionType.DOUBLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-30 13_18_54
+BreakoutNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.A2C	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-31 14_44_31
+BreakoutNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.ICM_LOSS	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-11-01 13_35_15
+BreakoutNoFrameskip-v4	4	4	5	2500000	0.5	0.2	0.5	0.02	AttentionTarget.NONE	AttentionType.SINGLE_ATTENTION	RewardType.INTRINSIC_AND_EXTRINSIC	2019-10-30 10_56_17
