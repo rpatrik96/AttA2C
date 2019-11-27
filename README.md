@@ -9,6 +9,7 @@ Supplementary material for the paper _Attention-based Curiosity-driven Explorati
 * [General](#general)
 * [Proposed methods](#proposed-methods)
 * [Results](#results)
+* [Cite] (#cite)
 
 ## General
 The aim of the project is to develop new exploration strategies for Reinforcement Learning for agents which can generalize better. The focus is on curiosity-based methods, such as the Intrinsic Curiosity Module of the paper [Curiosity-driven Exploration by Self-supervised Prediction](https://arxiv.org/abs/1705.05363), which is used extensively to build upon.
@@ -50,3 +51,14 @@ Experiments were carried out on three Atari games: Breakout, Pong and Seaquest (
 
 |![](figures/SeaquestNoFrameskip-v4/mean_reward_SeaquestNoFrameskip-v4.png)|![](figures/SeaquestNoFrameskip-v4/feat_std_SeaquestNoFrameskip-v4.png)|
 | - | - |
+
+## Cite
+If you found this work useful, please cite the following paper:
+```
+@article{reizinger2019attention,
+  title={Attention-based Curiosity-driven Exploration in Deep Reinforcement Learning},
+  author={Reizinger, Patrik and Szemenyei, M{\'a}rton},
+  journal={arXiv preprint arXiv:1910.10840},
+  year={2019}
+}
+```
