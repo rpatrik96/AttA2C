@@ -9,7 +9,7 @@ Supplementary material for the paper _Attention-based Curiosity-driven Explorati
 * [General](#general)
 * [Proposed methods](#proposed-methods)
 * [Results](#results)
-* [Cite] (#cite)
+* [Cite](#cite)
 
 ## General
 The aim of the project is to develop new exploration strategies for Reinforcement Learning for agents which can generalize better. The focus is on curiosity-based methods, such as the Intrinsic Curiosity Module of the paper [Curiosity-driven Exploration by Self-supervised Prediction](https://arxiv.org/abs/1705.05363), which is used extensively to build upon.
